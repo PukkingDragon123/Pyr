@@ -1,0 +1,14 @@
+id,role,type,description,size/ratio,style_ref,source
+thumbnail,Deploy/catalog cover and title hero image,image/png,Isometric half-built great pyramid at golden hour with construction ramp in a warm low-poly desert,16:9,STYLE FORMULA,self-rendered (Pillow; workspace out of credits)
+favicon,Deploy favicon and browser/site icon,image/png,Low-poly gleaming gold-capstone pyramid emblem with a sun disc,1:1,STYLE FORMULA,self-rendered (Pillow; workspace out of credits)
+bg_sky,In-game gradient sky and dune backdrop behind the isometric scene,procedural/canvas,Warm golden-hour gradient sky with sun glow and distant low-poly dunes,viewport,STYLE FORMULA,procedural
+music_main,Looping ambient soundtrack under gameplay,audio/webaudio,Calm hypnotic Egyptian desert pad with slow arpeggio and soft drum pulse,loop,STYLE TOKEN,synthesized (Web Audio API; no credits)
+sfx_place,Block placement and tap feedback,audio/webaudio,Heavy limestone block set-down thunk,~0.25s,n/a,synthesized (Web Audio API)
+sfx_unlock,Unlock / new-tier / layer-complete cue,audio/webaudio,Bright ceremonial chime,~0.6s,n/a,synthesized (Web Audio API)
+sfx_disaster,Disaster event alert,audio/webaudio,Ominous low ceremonial horn,~0.9s,n/a,synthesized (Web Audio API)
+sfx_capstone,Capstone ceremony fanfare,audio/webaudio,Triumphant rising chord,~1.5s,n/a,synthesized (Web Audio API)
+pyramid_geometry,The growing monument rendered brick by brick,procedural/canvas,Isometric low-poly cubes with three shaded faces plus a gold capstone,n/a,STYLE FORMULA,procedural
+worker_sprites,Tiny workers moving along ramps and sites,procedural/canvas,Small low-poly laborers in tunics moving along the supply chain,n/a,STYLE FORMULA,procedural
+city_buildings,Support-city structures around the pyramid,procedural/canvas,Low-poly villages, farms, markets, temples, docks and storage yards,n/a,STYLE FORMULA,procedural
+ui_icons,Resource, worker, machine and building icons,procedural/canvas+svg,Clean low-poly glyph icons for resources and crew/machine types,n/a,STYLE FORMULA,procedural
+weather_fx,Weather and day/night visual effects,procedural/canvas,Sandstorm haze, heat shimmer, Nile flood water, rain, day/night tint,n/a,STYLE FORMULA,procedural
