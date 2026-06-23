@@ -4,7 +4,7 @@ isometric style. No AI generation (workspace out of credits) — pure Pillow."""
 import math, os
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
-OUT = os.path.join(os.path.dirname(__file__), "..", "game", "assets")
+OUT = os.path.join(os.path.dirname(__file__), "..", "assets")
 os.makedirs(OUT, exist_ok=True)
 
 def hx(c): return tuple(int(c[i:i+2], 16) for i in (1, 3, 5))

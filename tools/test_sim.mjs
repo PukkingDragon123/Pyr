@@ -1,12 +1,12 @@
 // Headless logic test for the core simulation (no DOM).
-import { newGame, costFor, capsFor } from "../game/src/state.js";
+import { newGame, costFor, capsFor } from "../src/state.js";
 import {
   step, tapPlace, computeStats, buyBuilding, buyWorker, buyBlessing,
   doPrestige, legacyGain, simulateOffline, isUnlocked,
-} from "../game/src/sim.js";
-import { wonderGeom, blocksForLayer, wonderFor, FIRST_WONDER_TOTAL, BUILDINGS, WORKERS } from "../game/src/data.js";
-import { fmt, fmtTime } from "../game/src/format.js";
-import { pyramidBounds } from "../game/src/iso.js";
+} from "../src/sim.js";
+import { wonderGeom, blocksForLayer, wonderFor, FIRST_WONDER_TOTAL, BUILDINGS, WORKERS } from "../src/data.js";
+import { fmt, fmtTime } from "../src/format.js";
+import { pyramidBounds } from "../src/iso.js";
 
 let fails = 0;
 const ok = (c, m) => { if (!c) { console.log("  ✗ " + m); fails++; } else console.log("  ✓ " + m); };

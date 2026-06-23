@@ -2,9 +2,9 @@
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PW_PATH || "playwright");
-import { newGame } from "../game/src/state.js";
-import { buyBuilding } from "../game/src/sim.js";
-import { blocksForLayer } from "../game/src/data.js";
+import { newGame } from "../src/state.js";
+import { buyBuilding } from "../src/sim.js";
+import { blocksForLayer } from "../src/data.js";
 
 const BASE = process.env.BASE || "http://localhost:8099/";
 const errors = [];

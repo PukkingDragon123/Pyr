@@ -3,8 +3,16 @@
 // weather and tint redraw per frame (performance law).
 import { wonderFor, wonderGeom } from "./data.js";
 import { project, cubeFaces, layerSide, layerCells, pyramidBounds } from "./iso.js";
+import { drawHuman, drawAnimal } from "./sprites.js";
 
 export const DAY_LEN = 200; // seconds per full day/night cycle
+
+const SKINS = ["#caa06a", "#b5895a", "#9a6f44", "#d8b483", "#a87a4c"];
+const CLOTHS = ["#3a6ea5", "#c0392b", "#d4a017", "#2c8c84", "#7b4ea0"];
+function shadow(ctx, x, y, rx) {
+  ctx.fillStyle = "rgba(40,26,12,0.2)";
+  ctx.beginPath(); ctx.ellipse(x, y, rx, rx * 0.4, 0, 0, 7); ctx.fill();
+}
 
 // ---- colour helpers ----
 function hx(c) { const n = parseInt(c.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
@@ -33,13 +41,26 @@ function poly(ctx, pts, fill) {
   ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
 }
 
+// A single polished block: three shaded faces + a lit top edge and a dark seam.
+function paintCube(ctx, f, faces, u) {
+  poly(ctx, f.left, faces[2]);
+  poly(ctx, f.right, faces[1]);
+  poly(ctx, f.top, faces[0]);
+  if (u < 9) return; // seams become noise when zoomed far out
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(35,24,14,0.22)"; // front vertical seam
+  ctx.beginPath(); ctx.moveTo(f.left[1].x, f.left[1].y); ctx.lineTo(f.left[2].x, f.left[2].y); ctx.stroke();
+  ctx.strokeStyle = "rgba(255,247,225,0.3)"; // lit top-back edges
+  ctx.beginPath(); ctx.moveTo(f.top[3].x, f.top[3].y); ctx.lineTo(f.top[0].x, f.top[0].y); ctx.lineTo(f.top[1].x, f.top[1].y); ctx.stroke();
+}
+
 export class Renderer {
   constructor(canvas) {
     this.canvas = canvas; this.ctx = canvas.getContext("2d");
     this.pan = { x: 0, y: 0 }; this.zoom = 1;
     this.cache = document.createElement("canvas"); this.cctx = this.cache.getContext("2d");
     this.cacheKey = ""; this.bounds = null; this.pad = 40;
-    this.workers = []; this.bursts = [];
+    this.workers = []; this.animals = []; this.bursts = [];
     this.sand = []; this.rain = []; this.flood = 0;
     for (let i = 0; i < 220; i++) this.sand.push({ x: 0, y: 0, vx: 0, vy: 0, life: 0 });
     for (let i = 0; i < 160; i++) this.rain.push({ x: 0, y: 0, v: 0, life: 0 });
@@ -102,10 +123,7 @@ export class Renderer {
     for (let i = 0; i < n; i++) {
       const c = cells[i];
       const p = project(c.gx, c.gy, j + 1, cam);
-      const f = cubeFaces(p.x, p.y, cam.u);
-      poly(ctx, f.left, wonder.faces[2]);
-      poly(ctx, f.right, wonder.faces[1]);
-      poly(ctx, f.top, wonder.faces[0]);
+      paintCube(ctx, cubeFaces(p.x, p.y, cam.u), wonder.faces, cam.u);
     }
   }
 
@@ -265,33 +283,70 @@ export class Renderer {
     return { foot, head };
   }
 
+  _newWorker() {
+    const i = (Math.random() * SKINS.length) | 0;
+    return {
+      t: Math.random(), lane: (Math.random() - 0.5) * 0.9, sp: 0.12 + Math.random() * 0.12, ph: Math.random(),
+      pal: { skin: SKINS[i], skinDark: mix(SKINS[i], "#000", 0.28), cloth: CLOTHS[(Math.random() * CLOTHS.length) | 0] },
+    };
+  }
+  _newAnimal(i) {
+    const types = ["ox", "ox", "ox", "elephant", "croc"];
+    return { t: Math.random(), lane: (Math.random() - 0.5) * 0.6, sp: 0.05 + Math.random() * 0.05, ph: Math.random(), type: types[i % types.length] };
+  }
+
   _workers(ctx, cam, g, state, stats, dt) {
     const { foot, head } = this._rampPath(cam, g, state);
-    // ramp
     const nx = -(head.y - foot.y), ny = (head.x - foot.x);
-    const len = Math.hypot(nx, ny) || 1; const ux = nx / len, uy = ny / len; const rw = cam.u * 1.1;
+    const len = Math.hypot(nx, ny) || 1; const ux = nx / len, uy = ny / len; const rw = cam.u * 1.0;
+    // ramp body + side rail
     poly(ctx, [
       { x: foot.x - ux * rw, y: foot.y - uy * rw }, { x: foot.x + ux * rw, y: foot.y + uy * rw },
-      { x: head.x + ux * rw * 0.4, y: head.y + uy * rw * 0.4 }, { x: head.x - ux * rw * 0.4, y: head.y - uy * rw * 0.4 },
+      { x: head.x + ux * rw * 0.45, y: head.y + uy * rw * 0.45 }, { x: head.x - ux * rw * 0.45, y: head.y - uy * rw * 0.45 },
     ], "rgba(150,110,60,.5)");
 
+    const u = cam.u;
     const active = !state.complete && (state._lastFlow || 0) > 0.0001;
-    let target = state.complete ? 6 : Math.max(active ? 5 : 2, Math.min(120, Math.round(4 + Math.sqrt(stats.placement || 0) * 1.3)));
-    while (this.workers.length < target) this.workers.push({ t: Math.random(), lane: (Math.random() - 0.5), sp: 0.18 + Math.random() * 0.22, c: Math.random() < 0.5 ? "#d8c39a" : "#c98f63" });
+    const target = state.complete ? 5 : Math.max(active ? 6 : 3, Math.min(55, Math.round(5 + Math.sqrt(stats.placement || 0) * 1.1)));
+    while (this.workers.length < target) this.workers.push(this._newWorker());
     while (this.workers.length > target) this.workers.pop();
 
-    const speedScale = state.complete ? 0.3 : (0.4 + Math.min(2, (stats.rateCap || 0) * 0.02));
-    const u = cam.u;
-    for (const w of this.workers) {
+    const speedScale = state.complete ? 0.25 : (0.4 + Math.min(2, (stats.rateCap || 0) * 0.02));
+    const dir = head.x >= foot.x ? 1 : -1;
+    const hsize = Math.max(11, u * 1.35);
+    const sorted = this.workers.slice().sort((a, b) => b.t - a.t); // far (high t) first
+    for (const w of sorted) {
       w.t += w.sp * speedScale * dt; if (w.t > 1) w.t -= 1;
       const x = lerp(foot.x, head.x, w.t) + ux * w.lane * rw;
       const y = lerp(foot.y, head.y, w.t) + uy * w.lane * rw;
-      const sz = Math.max(2, u * 0.13);
-      ctx.fillStyle = w.c;
-      ctx.fillRect(x - sz * 0.35, y - sz * 1.6, sz * 0.7, sz * 1.3);     // body
-      ctx.fillStyle = "#5a3b25";
-      ctx.fillRect(x - sz * 0.28, y - sz * 2.1, sz * 0.56, sz * 0.55);   // head
-      if (w.t < 0.85 && !state.complete) { ctx.fillStyle = "#cdbb95"; ctx.fillRect(x - sz * 0.45, y - sz * 1.85, sz * 0.9, sz * 0.4); } // carried block
+      shadow(ctx, x, y, hsize * 0.22);
+      drawHuman(ctx, x, y, hsize, w.t * 7 + w.ph, dir, w.t < 0.92 && !state.complete, w.pal);
+    }
+    this._animals(ctx, cam, g, state, stats, dt);
+  }
+
+  _animals(ctx, cam, g, state, stats, dt) {
+    const A = project(-2.5, g.base + 2.5, 0, cam);
+    const Bp = project(g.base + 1.5, g.base + 2.5, 0, cam);
+    let machines = 0;
+    for (const id of ["wooden_rollers", "rope_winch", "sled", "crane", "lubrication", "massive_ramp", "elevator", "marvel"]) machines += state.buildings[id] || 0;
+    const target = Math.min(7, Math.floor(machines / 3));
+    while (this.animals.length < target) this.animals.push(this._newAnimal(this.animals.length));
+    while (this.animals.length > target) this.animals.pop();
+
+    const u = cam.u, dir = Bp.x >= A.x ? 1 : -1;
+    const speed = 0.3 + Math.min(1.4, (stats.rateCap || 0) * 0.02);
+    const sorted = this.animals.slice().sort((a, b) => a.t - b.t);
+    for (const a of sorted) {
+      a.t += a.sp * speed * dt; if (a.t > 1) a.t -= 1;
+      const x = lerp(A.x, Bp.x, a.t), y = lerp(A.y, Bp.y, a.t) + a.lane * u;
+      shadow(ctx, x, y, u * (a.type === "elephant" ? 0.95 : 0.7));
+      drawAnimal(ctx, x, y, u * 0.95, a.t * 5 + a.ph, dir, a.type);
+    }
+    // crocodiles bask by the water during the Nile flood
+    if (this.flood > 0.2) {
+      shadow(ctx, A.x + u * 2.2, A.y + u * 1.7, u * 0.7);
+      drawAnimal(ctx, A.x + u * 2.2, A.y + u * 1.7, u * 0.85, 0, 1, "croc");
     }
   }
 
@@ -299,16 +354,16 @@ export class Renderer {
     const id = state.weather.id;
     // sandstorm
     if (id === "sandstorm") {
-      ctx.fillStyle = "rgba(200,160,90,.22)"; ctx.fillRect(0, 0, vw, vh);
+      ctx.fillStyle = "rgba(200,160,90,.15)"; ctx.fillRect(0, 0, vw, vh);
       for (const p of this.sand) {
         if (p.life <= 0) { p.x = Math.random() * vw; p.y = Math.random() * vh; p.vx = 220 + Math.random() * 260; p.vy = (Math.random() - 0.5) * 40; p.life = 0.6 + Math.random(); }
         p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; if (p.x > vw) p.x = -4;
-        ctx.fillStyle = "rgba(214,180,120,.5)"; ctx.fillRect(p.x, p.y, 7, 1.4);
+        ctx.fillStyle = "rgba(214,180,120,.4)"; ctx.fillRect(p.x, p.y, 7, 1.4);
       }
     } else for (const p of this.sand) p.life = 0;
     // rain
     if (id === "rain") {
-      ctx.fillStyle = "rgba(40,50,80,.18)"; ctx.fillRect(0, 0, vw, vh);
+      ctx.fillStyle = "rgba(40,50,80,.13)"; ctx.fillRect(0, 0, vw, vh);
       for (const p of this.rain) {
         if (p.life <= 0) { p.x = Math.random() * vw; p.y = -10; p.v = 600 + Math.random() * 300; p.life = 1 + Math.random(); }
         p.y += p.v * dt; p.x += 60 * dt; p.life -= dt; if (p.y > vh) p.life = 0;

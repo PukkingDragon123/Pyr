@@ -176,7 +176,7 @@ function triggerDisaster(s, def, st) {
     let bestK = null, bestV = 0;
     for (const k of RES) if (s.res[k] > bestV) { bestV = s.res[k]; bestK = k; }
     if (bestK) {
-      const pct = rangeRand(s, 0.08, 0.2);
+      const pct = rangeRand(s, 0.05, 0.12);
       const stolen = s.res[bestK] * pct;
       s.res[bestK] -= stolen;
       pushLog(s, `Tomb robbers stole ${Math.floor(stolen)} ${bestK}!`, "bad");
@@ -220,7 +220,7 @@ function rollDisasters(s, dt, st) {
     if (nextRand(s) < chance) triggerDisaster(s, d, st);
   }
   // strike: condition-driven
-  if (!hasEvent(s, "strike") && s.morale < 22) {
+  if (!hasEvent(s, "strike") && s.morale < 15) {
     s.events.push({ id: "strike", timeLeft: 0 });
     pushLog(s, "Worker Strike! Starving crews down tools — restore food & water.", "bad");
     s._fx.push({ type: "disaster", id: "strike" });
@@ -248,9 +248,9 @@ export function step(s, dt) {
   if (s.res.food < 0) { s.res.food = 0; starving = true; }
   if (s.res.water < 0) { s.res.water = 0; starving = true; }
 
-  // morale toward target (minus starvation)
-  let target = st.moraleTarget - (starving ? 55 : 0);
-  s.morale += (target - s.morale) * Math.min(1, dt * 0.25);
+  // morale toward target (minus starvation) — gentle so the game stays relaxing
+  let target = st.moraleTarget - (starving ? 40 : 0);
+  s.morale += (target - s.morale) * Math.min(1, dt * (s.morale < target ? 0.3 : 0.18));
   s.morale = Math.max(0, Math.min(st.moraleTarget, s.morale));
 
   // caps
