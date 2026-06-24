@@ -13,7 +13,7 @@ Relaxing to play, on desktop, mobile (touch), or with a gamepad.
 
 ## ▶ Play
 
-**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=4**
+**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=5**
 
 (Served straight from this branch via raw.githack.com — bump the `?v=` number to bust the cache after updates.)
 

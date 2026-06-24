@@ -48,7 +48,7 @@ function migrate(s) {
   s.cd = s.cd || {};
   s.seenUnlocks = s.seenUnlocks || {};
   s.whip = Object.assign({ boostT: 0, cd: 0, ever: false }, s.whip || {});
-  s.tutorial = s.tutorial || { step: 0, done: false };
+  s.quests = s.quests || { index: 0 };
   if (typeof s.rng !== "number") s.rng = base.rng;
   if (typeof s.morale !== "number") s.morale = 100;
   if (!s.weather) s.weather = base.weather;

@@ -18,6 +18,12 @@ export const STR = {
   legacy: "Legacy",
   legacyShort: "Legacy",
 
+  level: "Level",
+  reward: "Reward:",
+  pharaohName: "The Pharaoh",
+  pharaohQuestDone: "It is done — the gods smile upon your reign.",
+  pharaohLevel: (L) => `Level ${L}! Your name echoes louder through the ages.`,
+
   buildTitle: "Construction",
   buildRate: "Building",
   blocksPerSec: "blocks/s",

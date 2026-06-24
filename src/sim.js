@@ -4,6 +4,7 @@ import {
   RES, BUILDINGS, WORKERS, BLESSINGS, WEATHER,
   LIMESTONE_PER_BLOCK, PER_BUILDER, wonderGeom, blocksForLayer, wonderFor,
   FIRST_WONDER_TOTAL, BASE_CAPS, OFFLINE_CAP_S, OFFLINE_RATE,
+  UNLOCK_LEVEL, levelForXp, questFor,
 } from "./data.js";
 import {
   costFor, canAfford, spend, capsFor, clampResources, resolveQty,
@@ -105,6 +106,13 @@ export function step(s, dt) {
     else s._lastFlow = 0;
   } else s._lastFlow = 0;
   s._limited = limited;
+
+  // level-up moments
+  const lvl = levelForXp(s.stats.totalBlocksAllTime);
+  if (s._level == null) s._level = lvl;
+  else if (lvl > s._level) { for (let L = s._level + 1; L <= lvl; L++) s._fx.push({ type: "level", level: L }); s._level = lvl; }
+  checkQuests(s);
+
   s._stats = st;
   return st;
 }
@@ -118,7 +126,24 @@ export function whip(s) {
   return true;
 }
 
-export function isUnlocked(s, def) { return s.stats.totalBlocksAllTime >= (def.unlock || 0); }
+export function getLevel(s) { return levelForXp(s.stats.totalBlocksAllTime); }
+export function isUnlocked(s, def) { return getLevel(s) >= (UNLOCK_LEVEL[def.id] || 1); }
+
+// The Pharaoh's quests — advance & reward as each goal is met.
+export function checkQuests(s) {
+  if (!s.quests) s.quests = { index: 0 };
+  let guard = 0;
+  while (guard++ < 25) {
+    const q = questFor(s);
+    if (!q.goal(s)) break;
+    if (q.reward) {
+      if (q.reward.res) for (const k in q.reward.res) s.res[k] = (s.res[k] || 0) + q.reward.res[k];
+      if (q.reward.legacy) { s.legacy += q.reward.legacy; s.stats.totalLegacyEarned += q.reward.legacy; }
+    }
+    s._fx.push({ type: "quest", text: q.text, reward: q.reward });
+    s.quests.index++;
+  }
+}
 
 export function buyBuilding(s, id) {
   const def = B[id]; if (!def || !isUnlocked(s, def)) return false;

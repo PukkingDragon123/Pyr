@@ -3,10 +3,10 @@
 import { STR } from "../strings.js";
 import {
   RES, RES_META, BUILDINGS, WORKERS, BLESSINGS,
-  WEATHER, wonderFor, wonderGeom, blocksForLayer,
+  WEATHER, wonderFor, wonderGeom, blocksForLayer, UNLOCK_LEVEL, xpInfo, questFor,
 } from "./data.js";
 import { costFor, canAfford, resolveQty } from "./state.js";
-import { isUnlocked, blessingCost } from "./sim.js";
+import { isUnlocked, blessingCost, getLevel } from "./sim.js";
 import { icon } from "./icons.js";
 import { fmt, fmtInt, fmtTime } from "./format.js";
 
@@ -53,8 +53,14 @@ export class UI {
     top.append(this.brand, this.resBar, this.legacyChip, helpBtn, gear);
     r.appendChild(top);
 
-    // ---- status (goal + build + weather) ----
+    // ---- status (level + goal + build + weather) ----
     const status = el("div", "status");
+    const lvlRow = el("div", "levelrow");
+    this.levelName = el("span", "lvlname");
+    this.levelXpWrap = el("div", "bar lvlbar"); this.levelXpFill = el("div", "fill");
+    this.levelXpWrap.appendChild(this.levelXpFill);
+    lvlRow.append(this.levelName, this.levelXpWrap);
+    status.appendChild(lvlRow);
     this.goalLine = el("div", "goal");
     this.progWrap = el("div", "bar"); this.progFill = el("div", "fill gold");
     this.progWrap.appendChild(this.progFill);
@@ -121,9 +127,21 @@ export class UI {
     // ---- center reward popup ----
     this.popupEl = el("div", "popup"); r.appendChild(this.popupEl);
 
-    // ---- tutorial ----
-    this.tutEl = el("div", "tut hidden"); r.appendChild(this.tutEl);
-    this._tutStep = -1;
+    // ---- Pharaoh guide + quest panel ----
+    this.questEl = el("div", "quest");
+    this.questEl.innerHTML = `<div class="ph-portrait">${icon("pharaoh")}</div>
+      <div class="q-main"><div class="q-head">${STR.pharaohName}</div><div class="q-text"></div>
+      <div class="q-foot"><span class="q-prog"></span><span class="q-reward"></span></div></div>`;
+    this.qText = this.questEl.querySelector(".q-text");
+    this.qProg = this.questEl.querySelector(".q-prog");
+    this.qReward = this.questEl.querySelector(".q-reward");
+    r.appendChild(this.questEl);
+
+    // ---- Pharaoh speech bubble ----
+    this.speechEl = el("div", "speech hidden");
+    this.speechEl.innerHTML = `<div class="ph-portrait big">${icon("pharaoh")}</div><div class="sp-text"></div>`;
+    this.spText = this.speechEl.querySelector(".sp-text");
+    r.appendChild(this.speechEl);
 
     // ---- modals ----
     this._buildModals();
@@ -138,44 +156,40 @@ export class UI {
     this._popupT = setTimeout(() => { this.popupEl.className = "popup " + (cls || ""); }, 1500);
   }
 
-  // ---- guided tutorial ----
-  _tutUpdate(state) {
-    if (state.tutorial.done) { this.tutEl.classList.add("hidden"); this._clearGlow(); return; }
-    const step = state.tutorial.step;
-    const steps = STR.tut.steps;
-    // auto-advance conditions
-    const cond = [
-      () => (state.buildings.quarry || 0) >= 2,
-      () => (state.workers.laborer || 0) >= 4,
-      () => state.whip && state.whip.ever,
-      () => false,
-    ];
-    if (step < cond.length && cond[step] && cond[step]()) { this._tutAdvance(state); return; }
-    if (this._tutStep !== step) { this._tutRender(state, step, steps[step]); this._tutStep = step; }
+  // ---- level bar ----
+  _updateLevel(state) {
+    const xi = xpInfo(state.stats.totalBlocksAllTime);
+    this.levelName.innerHTML = `<b>${STR.level} ${xi.level}</b>`;
+    this.levelXpFill.style.width = (xi.frac * 100).toFixed(0) + "%";
+    this.levelXpWrap.title = `${fmt(xi.cur)} / ${fmt(xi.need)} XP`;
   }
-  _tutAdvance(state) {
-    if (state.tutorial.step >= STR.tut.steps.length - 1) { this._tutFinish(state); return; }
-    state.tutorial.step++; this._tutStep = -1; this.app.saveNow();
-  }
-  _tutFinish(state) {
-    state.tutorial.done = true; this.tutEl.classList.add("hidden"); this._clearGlow(); this.app.saveNow();
-  }
-  _tutRender(state, step, data) {
-    this._clearGlow();
-    if (step === 0) { this._setTab("resource"); this._glow(this.tabBtns.resource); }
-    else if (step === 1) { this._setTab("crew"); this._glow(this.tabBtns.crew); }
-    const last = step >= STR.tut.steps.length - 1;
-    this.tutEl.innerHTML = `<div class="tut-step">${step + 1}/${STR.tut.steps.length}</div>
-      <h3>${data.title}</h3><p>${data.body}</p>`;
-    const row = el("div", "tut-btns");
-    const skip = el("button", "btn", STR.tut.skip); skip.onclick = () => this._tutFinish(state);
-    const next = el("button", "btn primary", last ? STR.tut.done : STR.tut.next);
-    next.onclick = () => this._tutAdvance(state);
-    row.append(skip, next); this.tutEl.appendChild(row);
-    this.tutEl.classList.remove("hidden");
+
+  // ---- Pharaoh quest panel + tab highlight ----
+  _updateQuest(state) {
+    const q = questFor(state);
+    if (this._questText !== q.text) {
+      this._questText = q.text; this.qText.textContent = q.text;
+      this._clearGlow();
+      if (q.tab && this.tabBtns[q.tab]) this._glow(this.tabBtns[q.tab]);
+    }
+    const p = q.prog ? q.prog(state) : null;
+    this.qProg.textContent = p ? `${fmt(p.cur)}/${fmt(p.max)}` : "";
+    let rw = "";
+    if (q.reward) {
+      if (q.reward.legacy) rw = `+${q.reward.legacy} ${STR.legacy}`;
+      else if (q.reward.res) { const k = Object.keys(q.reward.res)[0]; rw = `+${fmt(q.reward.res[k])} ${RES_META[k].name}`; }
+    }
+    this.qReward.textContent = rw ? STR.reward + " " + rw : "";
   }
   _glow(elm) { if (elm) elm.classList.add("tut-glow"); this._glowed = elm; }
   _clearGlow() { if (this._glowed) this._glowed.classList.remove("tut-glow"); this._glowed = null; }
+
+  pharaohSpeak(text) {
+    this.spText.textContent = text;
+    this.speechEl.classList.remove("hidden"); this.speechEl.classList.add("show");
+    clearTimeout(this._speechT);
+    this._speechT = setTimeout(() => { this.speechEl.classList.remove("show"); setTimeout(() => this.speechEl.classList.add("hidden"), 350); }, 4200);
+  }
 
   _buildModals() {
     this.modalWrap = el("div", "modalwrap hidden");
@@ -334,7 +348,7 @@ export class UI {
       const unlocked = isUnlocked(state, d);
       if (!unlocked) {
         lock.classList.remove("hidden");
-        lock.innerHTML = `${STR.locked} ${fmt(d.unlock)} ${STR.blocksUnit}`;
+        lock.innerHTML = `${STR.locked} ${STR.level} ${UNLOCK_LEVEL[d.id] || 1}`;
         item.classList.add("locked");
         name.textContent = d.name;
         cost.innerHTML = "";
@@ -397,9 +411,9 @@ export class UI {
     this._rebuildList(state, stats);
     this._refreshList(state, stats);
     this._log(state);
-    this._tutUpdate(state);
-    const tutActive = !state.tutorial.done;
-    this.tip.classList.toggle("hidden", tutActive || state.stats.totalBlocksAllTime > 30);
+    this._updateLevel(state);
+    this._updateQuest(state);
+    this.tip.classList.add("hidden");
   }
 
   _banner(state, stats) {

@@ -17,7 +17,7 @@ console.log("format:", fmt(0), fmt(1234), fmt(3.2e9), fmt(1e21), "|", fmtTime(12
 const s = newGame();
 ok(finite(s.res), "fresh resources finite");
 ok(s.buildings.quarry === 1 && s.workers.laborer === 3, "starter present");
-ok(s.whip && s.tutorial, "whip + tutorial state present");
+ok(s.whip && s.quests, "whip + quests state present");
 
 // simulate ~20 min, buying greedily
 for (let t = 0; t < 1200; t++) {

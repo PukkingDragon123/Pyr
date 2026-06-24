@@ -40,9 +40,15 @@ const MISC = {
   blessing: `<path d="M12 2 l2.5 6 6.5.4 -5 4.2 1.7 6.4 -5.7-3.6 -5.7 3.6 1.7-6.4 -5-4.2 6.5-.4 Z" fill="currentColor"/>`,
   weather: `<circle cx="9" cy="9" r="4" fill="currentColor"/><path d="M14 18 h6 M11 21 h7 M8 15 h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`,
   warn: `<path d="M12 3 L22 20 H2 Z" fill="currentColor"/><rect x="11" y="9" width="2" height="6" fill="#1c1410"/><rect x="11" y="16" width="2" height="2" fill="#1c1410"/>`,
+  scroll: `<rect x="5" y="4" width="14" height="16" rx="2" fill="currentColor"/><rect x="7.5" y="7.5" width="9" height="1.6" rx=".8" fill="#1c1410" opacity=".5"/><rect x="7.5" y="11" width="9" height="1.6" rx=".8" fill="#1c1410" opacity=".5"/><rect x="7.5" y="14.5" width="6" height="1.6" rx=".8" fill="#1c1410" opacity=".5"/>`,
+  levelup: `<path d="M12 3 L20 11 H15 V21 H9 V11 H4 Z" fill="currentColor"/>`,
 };
 
+// Colourful Pharaoh portrait (uses its own colours, not currentColor).
+const PHARAOH = `<path d="M12 2 C7 2 4 5.6 4 10 L5 20.5 L9 18.6 L9 12 a3 3 0 0 1 6 0 L15 18.6 L19 20.5 L20 10 C20 5.6 17 2 12 2 Z" fill="#2f5aa6"/><path d="M8.2 4.3 L9.5 3.9 L9.5 17.4 L8.2 17.8 Z" fill="#e8c14e"/><path d="M15.8 4.3 L14.5 3.9 L14.5 17.4 L15.8 17.8 Z" fill="#e8c14e"/><ellipse cx="12" cy="10.2" rx="3.3" ry="4" fill="#cd9a5f"/><rect x="11" y="13.6" width="2" height="4.2" rx="1" fill="#cd9a5f"/><circle cx="12" cy="5.2" r="1" fill="#e8c14e"/><circle cx="12" cy="5.2" r="0.45" fill="#b23"/><circle cx="10.8" cy="9.9" r="0.6" fill="#23170c"/><circle cx="13.2" cy="9.9" r="0.6" fill="#23170c"/>`;
+
 export function icon(id) {
+  if (id === "pharaoh") return wrap(PHARAOH);
   if (RES_ICONS[id]) { const m = RES_META[id]; return RES_ICONS[id](m.color, m.dark); }
   if (MISC[id]) return wrap(MISC[id]);
   return wrap(MISC.block);

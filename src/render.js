@@ -133,9 +133,9 @@ export class Renderer {
     const g = wonderGeom(state.wonderIndex);
     const b1 = pyramidBounds(g.base, g.layers, 1), w1 = b1.maxX - b1.minX, h1 = b1.maxY - b1.minY;
     const mobile = vw < 860;
-    const u = Math.max(3.2, Math.min(70, Math.min(vw * (mobile ? 0.78 : 0.5) * this.zoom / w1, vh * (mobile ? 0.28 : 0.5) * this.zoom / h1)));
+    const u = Math.max(3.6, Math.min(82, Math.min(vw * (mobile ? 0.86 : 0.62) * this.zoom / w1, vh * (mobile ? 0.34 : 0.62) * this.zoom / h1)));
     const b = pyramidBounds(g.base, g.layers, u);
-    return { u, ox: vw / 2 - (b.minX + b.maxX) / 2 + this.pan.x, oy: vh * (mobile ? 0.5 : 0.72) - b.maxY + this.pan.y, g, bounds: b };
+    return { u, ox: vw / 2 - (b.minX + b.maxX) / 2 + this.pan.x, oy: vh * (mobile ? 0.52 : 0.7) - b.maxY + this.pan.y, g, bounds: b };
   }
   _rebuildCache(cam, state, dpr) {
     const g = cam.g, wonder = wonderFor(state.wonderIndex), completed = state.complete ? g.layers : state.layer;
@@ -209,7 +209,7 @@ export class Renderer {
     if (sk.tint > 0.01) { ctx.fillStyle = `rgba(10,16,44,${sk.tint * 0.4})`; ctx.fillRect(0, 0, vw, vh); }
     if (this.grainPat) { ctx.save(); ctx.globalAlpha = 0.045; ctx.globalCompositeOperation = "overlay"; ctx.fillStyle = this.grainPat; ctx.fillRect(0, 0, vw, vh); ctx.restore(); }
     const vg = ctx.createRadialGradient(vw / 2, vh * 0.46, Math.min(vw, vh) * 0.36, vw / 2, vh * 0.52, Math.max(vw, vh) * 0.76);
-    vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(10,6,2,0.32)"); ctx.fillStyle = vg; ctx.fillRect(0, 0, vw, vh);
+    vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(10,6,2,0.24)"); ctx.fillStyle = vg; ctx.fillRect(0, 0, vw, vh);
 
     for (let i = this.bursts.length - 1; i >= 0; i--) { const b = this.bursts[i]; b.life -= dt * 0.9; b.y += b.vy * dt; if (b.life <= 0) { this.bursts.splice(i, 1); continue; } ctx.globalAlpha = Math.max(0, b.life); ctx.font = "bold 16px ui-sans-serif,system-ui"; ctx.fillStyle = "rgba(0,0,0,.5)"; ctx.fillText(b.text, b.x + 1, b.y + 1); ctx.fillStyle = b.color; ctx.fillText(b.text, b.x, b.y); ctx.globalAlpha = 1; }
   }

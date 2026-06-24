@@ -172,6 +172,11 @@ function drainFx() {
       }
     } else if (f.type === "whip") {
       audio.play("whip");
+    } else if (f.type === "quest") {
+      audio.play("unlock"); ui.pharaohSpeak(STR.pharaohQuestDone); renderer.kick(2);
+      if (f.reward) { if (f.reward.legacy) ui.popup("+" + f.reward.legacy + " " + STR.legacy, "good"); }
+    } else if (f.type === "level") {
+      audio.play("unlock"); ui.pharaohSpeak(STR.pharaohLevel(f.level)); ui.popup(STR.level + " " + f.level + "!", "go"); renderer.whipFlash = 0.6;
     }
   }
   fx.length = 0;

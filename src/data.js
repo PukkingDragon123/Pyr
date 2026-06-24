@@ -189,3 +189,45 @@ export const WEATHER = [
 export const OFFLINE_CAP_S = 12 * 3600;
 export const OFFLINE_RATE = 0.5;
 export const AUTOSAVE_MS = 10000;
+
+// ----------------------------------------------------------------------------
+// Pharaoh levels — earned from all-time blocks; gate which features unlock.
+// ----------------------------------------------------------------------------
+export const UNLOCK_LEVEL = {
+  quarry: 1, farm: 1, well: 1, lumber_camp: 2, granite_mine: 4, copper_mine: 4,
+  wooden_rollers: 2, rope_winch: 3, sled: 5, crane: 7, lubrication: 10, massive_ramp: 13, elevator: 16, marvel: 20,
+  village: 2, granary: 2, storage_yard: 4, docks: 6, market: 7, temple: 9,
+  laborer: 1, mason: 3, engineer: 6, priest: 8, architect: 11, overseer: 14,
+};
+export const TAB_LEVEL = { resource: 1, crew: 1, machine: 2, city: 2, blessing: 1 };
+
+export function cumXp(L) { return Math.round(30 * (Math.pow(1.85, L - 1) - 1) / 0.85); }
+export function levelForXp(xp) { let L = 1; while (L < 250 && cumXp(L + 1) <= xp) L++; return L; }
+export function xpInfo(xp) {
+  const L = levelForXp(xp), a = cumXp(L), b = cumXp(L + 1);
+  return { level: L, cur: xp - a, need: b - a, frac: Math.min(1, (xp - a) / Math.max(1, b - a)), next: b };
+}
+
+// ----------------------------------------------------------------------------
+// Quests — the Pharaoh's interactive guide. Chained; rewards on completion.
+// goal(state)->bool, prog(state)->{cur,max} optional, reward {res?, legacy?}, tab? (to highlight).
+// ----------------------------------------------------------------------------
+export const QUESTS = [
+  { id: "q1", text: "Welcome, young Pharaoh. Every monument begins with stone — raise two Limestone Quarries.", tab: "resource", goal: (s) => (s.buildings.quarry || 0) >= 2, prog: (s) => ({ cur: Math.min(2, s.buildings.quarry || 0), max: 2 }), reward: { res: { wood: 40 } } },
+  { id: "q2", text: "A pyramid is built by hands, not by gods alone. Hire three Laborers.", tab: "crew", goal: (s) => (s.workers.laborer || 0) >= 6, prog: (s) => ({ cur: Math.max(0, Math.min(3, (s.workers.laborer || 0) - 3)), max: 3 }), reward: { res: { food: 60 } } },
+  { id: "q3", text: "Idle hands shame the crown. Tap a worker out on the sands to crack the whip.", goal: (s) => s.whip && s.whip.ever, reward: { res: { limestone: 120 } } },
+  { id: "q4", text: "Show the gods your worth — rise to Pharaoh Level 2.", goal: (s) => levelForXp(s.stats.totalBlocksAllTime) >= 2, reward: { legacy: 1 } },
+  { id: "q5", text: "Lay the first full course of stone across the base.", goal: (s) => s.layer >= 1 || s.complete, reward: { res: { limestone: 220, wood: 80 } } },
+  { id: "q6", text: "Workers need rest. Raise a Worker Village beside the works.", tab: "city", goal: (s) => (s.buildings.village || 0) >= 1, reward: { res: { food: 140 } } },
+  { id: "q7", text: "Open the deep mines — reach Level 4.", goal: (s) => levelForXp(s.stats.totalBlocksAllTime) >= 4, reward: { legacy: 2 } },
+  { id: "q8", text: "Speed the haul — build a Rope Winch, Sled or Crane.", tab: "machine", goal: (s) => ((s.buildings.rope_winch || 0) + (s.buildings.sled || 0) + (s.buildings.crane || 0)) >= 1, reward: { res: { copper: 70 } } },
+  { id: "q9", text: "Set the golden capstone — finish this pyramid!", goal: (s) => s.complete, reward: { legacy: 3 } },
+  { id: "q10", text: "A great Pharaoh never stops. Found a New Dynasty and build something greater.", goal: (s) => s.stats.dynasties >= 1, reward: { legacy: 2 } },
+];
+export function questFor(state) {
+  const i = (state.quests && state.quests.index) || 0;
+  if (i < QUESTS.length) return QUESTS[i];
+  const n = i - QUESTS.length, lvl = 8 + n * 3;
+  return { id: "qe" + i, text: `Ascend ever higher, eternal Pharaoh — reach Level ${lvl}.`, goal: (s) => levelForXp(s.stats.totalBlocksAllTime) >= lvl, reward: { legacy: 3 + n } };
+}
+

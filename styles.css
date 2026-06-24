@@ -203,16 +203,47 @@ svg.ic{width:1.15em;height:1.15em;vertical-align:-.18em;flex:0 0 auto}
 .ceremony-ic{color:var(--gold);font-size:0}.ceremony-ic svg{width:72px;height:72px;filter:drop-shadow(0 0 20px rgba(243,196,78,.75))}
 
 /* ---------- responsive: phones / narrow ---------- */
+/* ---------- level bar ---------- */
+.levelrow{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+.lvlname{font-size:12.5px;font-weight:800;color:var(--gold);white-space:nowrap}
+.lvlbar{flex:1;height:8px}
+.lvlbar .fill{background:linear-gradient(90deg,#5bd0df,#f3c44e);box-shadow:0 0 8px rgba(243,196,78,.4)}
+
+/* ---------- Pharaoh quest panel ---------- */
+.quest{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:14;display:flex;gap:12px;align-items:center;
+  width:min(560px,calc(100vw - 24px));background:linear-gradient(180deg,var(--card2),#241a10);border:1px solid var(--gold);
+  border-radius:16px;padding:11px 15px;box-shadow:var(--sh),0 0 0 3px rgba(243,196,78,.1)}
+.ph-portrait{width:46px;height:46px;flex:0 0 auto;border-radius:13px;background:radial-gradient(circle at 40% 28%,#3f6cc0,#1b2c54);
+  box-shadow:inset 0 0 0 2px rgba(243,196,78,.55),0 2px 8px rgba(0,0,0,.35);overflow:hidden;display:flex}
+.ph-portrait svg{width:100%;height:100%}
+.q-main{flex:1;min-width:0}
+.q-head{font-size:10.5px;font-weight:800;color:var(--gold);letter-spacing:.5px;text-transform:uppercase}
+.q-text{font-size:13px;color:var(--text);line-height:1.4;margin:2px 0 5px}
+.q-foot{display:flex;gap:14px;font-size:11.5px;align-items:center}
+.q-prog{color:var(--turq);font-weight:800;font-variant-numeric:tabular-nums}
+.q-reward{color:var(--good);font-weight:700}
+
+/* ---------- Pharaoh speech bubble ---------- */
+.speech{position:absolute;top:64px;left:50%;transform:translateX(-50%) translateY(-10px);z-index:26;display:flex;gap:13px;align-items:center;
+  width:min(520px,calc(100vw - 24px));background:linear-gradient(180deg,#34280f,#1d150c);border:1px solid var(--gold);
+  border-radius:16px;padding:13px 17px;box-shadow:0 16px 44px rgba(0,0,0,.55);opacity:0;transition:.35s cubic-bezier(.2,.9,.3,1.2)}
+.speech.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.ph-portrait.big{width:56px;height:56px}
+.sp-text{flex:1;font-size:14px;color:var(--text);line-height:1.45;font-weight:600}
+
+/* ---------- responsive ---------- */
 @media (max-width:860px){
   .status{top:calc(50px + env(safe-area-inset-top));left:7px;right:7px;width:auto;padding:11px 13px}
   .chron{display:none}
-  .banner{top:auto;bottom:calc(46vh + 12px)}
-  .dock{top:auto;bottom:0;left:0;right:0;width:auto;max-height:46vh;border-radius:20px 20px 0 0;padding-bottom:env(safe-area-inset-bottom)}
+  .banner{top:auto;bottom:calc(46vh + 86px)}
+  .dock{top:auto;bottom:0;left:0;right:0;width:auto;max-height:44vh;border-radius:20px 20px 0 0;padding-bottom:env(safe-area-inset-bottom)}
   .tabs{padding-top:10px}
-  .tip{bottom:calc(46vh + 66px)}
-  .toaster{top:auto;bottom:calc(46vh + 120px)}
-  .whipbtn{bottom:calc(46vh + 10px);padding:11px 18px 11px 12px;font-size:13.5px}
-  .tut{bottom:calc(46vh + 66px)}
+  .tip{display:none}
+  .toaster{top:auto;bottom:calc(44vh + 140px)}
+  .quest{bottom:calc(44vh + 10px);padding:9px 12px;gap:9px}
+  .ph-portrait{width:38px;height:38px}
+  .q-text{font-size:12px;margin:1px 0 3px}
+  .speech{top:auto;bottom:calc(44vh + 86px)}
   .item-desc{display:none}
   .item{padding:11px}
   .item-name{font-size:15px}
@@ -220,5 +251,4 @@ svg.ic{width:1.15em;height:1.15em;vertical-align:-.18em;flex:0 0 auto}
 }
 @media (max-width:560px){
   .status .weather .wxx{display:none}
-  .chain-row .lab,.morale .lab{width:64px}
 }
