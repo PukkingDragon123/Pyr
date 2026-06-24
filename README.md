@@ -13,7 +13,7 @@ Relaxing to play, on desktop, mobile (touch), or with a gamepad.
 
 ## ▶ Play
 
-**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=2**
+**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=3**
 
 (Served straight from this branch via raw.githack.com — bump the `?v=` number to bust the cache after updates.)
 
@@ -85,6 +85,11 @@ tools/              # make_card_art.py (deploy art), test_sim.mjs, smoke.mjs, cl
   `<canvas>` with a DOM HUD overlaid.
 - **Animated crews & animals** are fully procedural (sine-driven walk cycles,
   leg gaits, carried blocks) — no sprite sheets.
+- **Cinematic rendering:** directional lighting and ambient occlusion on every
+  block, a cast shadow under the pyramid, layered sky with sun bloom + horizon
+  glow + drifting clouds, atmospheric haze, a grain-textured ground, and a
+  full-frame film-grain + vignette post pass. The cached pyramid renders at
+  device resolution so it stays crisp.
 - **Performance:** completed pyramid layers are cached to an offscreen canvas
   (one blit/frame); only the active layer, capstone, workers, animals, weather
   and tint redraw. Sprites/particles are pooled and capped; DPR capped at 1.5.

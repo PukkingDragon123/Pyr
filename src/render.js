@@ -42,16 +42,33 @@ function poly(ctx, pts, fill) {
   ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
 }
 
-// A single polished block: three shaded faces + a lit top edge and a dark seam.
-function paintCube(ctx, f, faces, u) {
+// A polished, lit block: flat faces, then volume (AO gradient on the sides, a
+// sun sheen on the top) and crisp lit/shadow edges. `rich` shading is baked
+// into the cached pyramid (drawn once); the live layer uses the cheap path.
+function paintCube(ctx, f, faces, u, rich) {
   poly(ctx, f.left, faces[2]);
   poly(ctx, f.right, faces[1]);
   poly(ctx, f.top, faces[0]);
-  if (u < 9) return; // seams become noise when zoomed far out
+  if (rich && u >= 5) {
+    const topY = f.top[0].y, botY = f.left[2].y;
+    let g = ctx.createLinearGradient(0, topY, 0, botY);
+    g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(0,0,0,0.26)");
+    poly(ctx, f.left, g);
+    g = ctx.createLinearGradient(0, topY, 0, botY);
+    g.addColorStop(0, "rgba(0,0,0,0.05)"); g.addColorStop(1, "rgba(0,0,0,0.38)");
+    poly(ctx, f.right, g);
+    const tg = ctx.createLinearGradient(f.top[3].x, f.top[0].y, f.top[1].x, f.top[2].y);
+    tg.addColorStop(0, "rgba(255,248,225,0.18)"); tg.addColorStop(0.6, "rgba(255,248,225,0)");
+    poly(ctx, f.top, tg);
+  }
+  if (u < 8) return;
   ctx.lineWidth = 1;
-  ctx.strokeStyle = "rgba(35,24,14,0.22)"; // front vertical seam
-  ctx.beginPath(); ctx.moveTo(f.left[1].x, f.left[1].y); ctx.lineTo(f.left[2].x, f.left[2].y); ctx.stroke();
-  ctx.strokeStyle = "rgba(255,247,225,0.3)"; // lit top-back edges
+  ctx.strokeStyle = "rgba(28,18,10,0.3)"; // shadow seams
+  ctx.beginPath();
+  ctx.moveTo(f.left[1].x, f.left[1].y); ctx.lineTo(f.left[2].x, f.left[2].y);
+  ctx.moveTo(f.top[3].x, f.top[3].y); ctx.lineTo(f.top[2].x, f.top[2].y); ctx.lineTo(f.top[1].x, f.top[1].y);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(255,248,228,0.36)"; // lit top edges
   ctx.beginPath(); ctx.moveTo(f.top[3].x, f.top[3].y); ctx.lineTo(f.top[0].x, f.top[0].y); ctx.lineTo(f.top[1].x, f.top[1].y); ctx.stroke();
 }
 
@@ -67,8 +84,41 @@ export class Renderer {
     for (let i = 0; i < 220; i++) this.sand.push({ x: 0, y: 0, vx: 0, vy: 0, life: 0 });
     for (let i = 0; i < 160; i++) this.rain.push({ x: 0, y: 0, v: 0, life: 0 });
     for (let i = 0; i < 26; i++) this.motes.push({ x: Math.random(), y: Math.random(), sp: 0.3 + Math.random() * 0.7, sz: 1 + Math.random() * 1.6, ph: Math.random() * 6.28 });
+    this.clouds = [];
+    for (let i = 0; i < 4; i++) this.clouds.push({ x: Math.random() * 1.2, y: 0.1 + Math.random() * 0.24, s: 0.6 + Math.random() * 0.9, sp: 0.004 + Math.random() * 0.006 });
+    this.grain = this._makeGrain(); this.grainPat = null;
     this.huts = this._layoutCity();
     this.shake = 0; this.overseerCrack = 0; this.whipFlash = 0; this._osTimer = 0;
+  }
+
+  _makeGrain() {
+    const n = 96, c = document.createElement("canvas"); c.width = c.height = n;
+    const g = c.getContext("2d"), img = g.createImageData(n, n);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const v = 92 + Math.random() * 72; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0); return c;
+  }
+  _clouds(ctx, vw, vh, sk, dt) {
+    for (const c of this.clouds) {
+      c.x += c.sp * dt; if (c.x > 1.25) c.x -= 1.5;
+      const cx = c.x * (vw + 220) - 110, cy = vh * c.y, w = 72 * c.s, h = 22 * c.s, a = 0.2 * (1 - sk.tint);
+      const gr = ctx.createRadialGradient(cx, cy, 2, cx, cy, w);
+      gr.addColorStop(0, `rgba(255,250,238,${a})`); gr.addColorStop(1, "rgba(255,250,238,0)");
+      ctx.fillStyle = gr;
+      ctx.beginPath(); ctx.ellipse(cx, cy, w, h, 0, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(cx + w * 0.55, cy + h * 0.3, w * 0.7, h * 0.8, 0, 0, 7); ctx.fill();
+    }
+  }
+  _castShadow(ctx, cam, g, sk) {
+    const m = g.base, sh = cam.u * 0.55;
+    const pts = [project(0, 0, 0, cam), project(m - 1, 0, 0, cam), project(m - 1, m - 1, 0, cam), project(0, m - 1, 0, cam)]
+      .map((p) => ({ x: p.x + sh, y: p.y + sh * 0.5 }));
+    ctx.save();
+    try { ctx.filter = `blur(${Math.max(3, cam.u * 0.3)}px)`; } catch (e) {}
+    ctx.globalAlpha = 0.3 * (1 - sk.tint * 0.4);
+    poly(ctx, pts, "#15100a");
+    ctx.restore();
   }
 
   // ---- VFX: dust puffs, expanding rings, screen punch ----
@@ -140,85 +190,108 @@ export class Renderer {
     return { u, ox, oy, g, bounds: b };
   }
 
-  _rebuildCache(cam, state) {
+  _rebuildCache(cam, state, dpr) {
     const g = cam.g, wonder = wonderFor(state.wonderIndex);
     const completed = state.complete ? g.layers : state.layer;
-    const key = `${state.wonderIndex}|${completed}|${cam.u.toFixed(2)}`;
+    const sc = Math.min(2, Math.max(1, dpr || 1));
+    const key = `${state.wonderIndex}|${completed}|${cam.u.toFixed(2)}|${sc}`;
     if (key === this.cacheKey) return;
     this.cacheKey = key;
     const b = cam.bounds, pad = this.pad;
     const W = Math.ceil(b.maxX - b.minX + pad * 2), H = Math.ceil(b.maxY - b.minY + pad * 2);
-    this.cache.width = Math.max(1, W); this.cache.height = Math.max(1, H);
-    const cc = this.cctx; cc.clearRect(0, 0, W, H);
+    this.cacheW = W; this.cacheH = H;
+    this.cache.width = Math.max(1, Math.ceil(W * sc)); this.cache.height = Math.max(1, Math.ceil(H * sc));
+    const cc = this.cctx; cc.setTransform(sc, 0, 0, sc, 0, 0); cc.clearRect(0, 0, W, H);
     const local = { u: cam.u, ox: pad - b.minX, oy: pad - b.minY };
     this.cacheOffX = b.minX - pad; this.cacheOffY = b.minY - pad;
-    for (let j = 0; j < completed; j++) this._drawLayer(cc, state, j, layerSide(g.base, j) ** 2, local, wonder);
+    for (let j = 0; j < completed; j++) this._drawLayer(cc, state, j, layerSide(g.base, j) ** 2, local, wonder, true);
   }
 
-  _drawLayer(ctx, state, j, count, cam, wonder, glow) {
+  _drawLayer(ctx, state, j, count, cam, wonder, rich) {
     const cells = layerCells(wonderGeom(state.wonderIndex).base, j);
     const n = Math.min(count, cells.length);
     for (let i = 0; i < n; i++) {
       const c = cells[i];
       const p = project(c.gx, c.gy, j + 1, cam);
-      paintCube(ctx, cubeFaces(p.x, p.y, cam.u), wonder.faces, cam.u);
+      paintCube(ctx, cubeFaces(p.x, p.y, cam.u), wonder.faces, cam.u, rich);
     }
   }
 
   frame(state, stats, dt, vw, vh) {
     const ctx = this.ctx;
+    const dpr = vw > 0 ? this.canvas.width / vw : 1;
+    if (!this.grainPat && this.grain) this.grainPat = ctx.createPattern(this.grain, "repeat");
     const phase = (state.clock % DAY_LEN) / DAY_LEN;
     const sk = sky(phase);
 
-    // sky
+    // sky — layered gradient
     const grad = ctx.createLinearGradient(0, 0, 0, vh);
-    grad.addColorStop(0, sk.top); grad.addColorStop(1, sk.bot);
+    grad.addColorStop(0, sk.top); grad.addColorStop(0.55, mix(sk.top, sk.bot, 0.7)); grad.addColorStop(1, sk.bot);
     ctx.fillStyle = grad; ctx.fillRect(0, 0, vw, vh);
 
-    // sun / moon
     const sunX = vw * (0.12 + 0.76 * phase);
     const sunY = vh * (0.62 - Math.sin(phase * Math.PI) * 0.5);
     const isNight = phase > 0.6 && phase < 0.85;
+
+    this._clouds(ctx, vw, vh, sk, dt);
+
     if (isNight) {
-      ctx.fillStyle = "rgba(255,255,255,.85)"; ctx.beginPath(); ctx.arc(vw * 0.8, vh * 0.2, 22, 0, 7); ctx.fill();
+      ctx.fillStyle = "rgba(248,250,255,.9)"; ctx.beginPath(); ctx.arc(vw * 0.8, vh * 0.2, 22, 0, 7); ctx.fill();
       ctx.fillStyle = "rgba(255,255,255,.6)";
-      for (let i = 0; i < 40; i++) ctx.fillRect((i * 8821 % vw), (i * 5333 % (vh * 0.5)), 1.5, 1.5);
+      for (let i = 0; i < 50; i++) ctx.fillRect((i * 8821 % vw), (i * 5333 % (vh * 0.55)), 1.5, 1.5);
     } else {
-      const sg = ctx.createRadialGradient(sunX, sunY, 4, sunX, sunY, 120);
-      sg.addColorStop(0, "rgba(255,240,200,.95)"); sg.addColorStop(1, "rgba(255,200,120,0)");
-      ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(sunX, sunY, 120, 0, 7); ctx.fill();
-      ctx.fillStyle = "#fff3cf"; ctx.beginPath(); ctx.arc(sunX, sunY, 26, 0, 7); ctx.fill();
+      const hg = ctx.createRadialGradient(sunX, vh * 0.6, 10, sunX, vh * 0.6, vw * 0.7);
+      hg.addColorStop(0, `rgba(255,226,160,${0.32 * (1 - sk.tint)})`); hg.addColorStop(1, "rgba(255,226,160,0)");
+      ctx.fillStyle = hg; ctx.fillRect(0, 0, vw, vh);
+      const sg = ctx.createRadialGradient(sunX, sunY, 4, sunX, sunY, 150);
+      sg.addColorStop(0, "rgba(255,245,212,.98)"); sg.addColorStop(0.5, "rgba(255,214,150,.5)"); sg.addColorStop(1, "rgba(255,200,120,0)");
+      ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(sunX, sunY, 150, 0, 7); ctx.fill();
+      ctx.fillStyle = "#fff6da"; ctx.beginPath(); ctx.arc(sunX, sunY, 27, 0, 7); ctx.fill();
     }
 
-    // distant dunes (parallax with pan)
+    // distant dunes with shading
     const hY = vh * 0.6;
-    const px = this.pan.x * 0.15;
+    const px = this.pan.x * 0.12;
     for (let d = 0; d < 3; d++) {
-      ctx.fillStyle = mix("#e8c187", "#3a2f4a", sk.tint * 0.6 + d * 0.12);
+      const top = mix(mix("#f0cf95", "#caa066", d / 2), "#3a2f4a", sk.tint * 0.6);
+      const base = hY + d * 24;
+      const dg = ctx.createLinearGradient(0, base - 30, 0, base + 90);
+      dg.addColorStop(0, mix(top, "#fff", 0.12)); dg.addColorStop(1, mix(top, "#000", 0.14));
+      ctx.fillStyle = dg;
       ctx.beginPath(); ctx.moveTo(-50, vh);
-      const amp = 26 - d * 6, base = hY + d * 26;
-      for (let x = -50; x <= vw + 50; x += 40)
+      const amp = 26 - d * 6;
+      for (let x = -50; x <= vw + 50; x += 36)
         ctx.lineTo(x, base + Math.sin((x + px + d * 120) * 0.006) * amp);
       ctx.lineTo(vw + 50, vh); ctx.closePath(); ctx.fill();
     }
+    // atmospheric haze band blending dunes into the sky
+    const haze = ctx.createLinearGradient(0, hY - 44, 0, hY + 64);
+    haze.addColorStop(0, `rgba(245,224,180,${0.5 * (1 - sk.tint)})`); haze.addColorStop(1, "rgba(245,224,180,0)");
+    ctx.fillStyle = haze; ctx.fillRect(0, hY - 44, vw, 110);
 
-    // ground sand
-    ctx.fillStyle = mix("#dcb87f", "#2a2440", sk.tint * 0.55);
-    ctx.fillRect(0, hY + 40, vw, vh);
+    // ground sand: gradient + subtle baked grain
+    const gg = ctx.createLinearGradient(0, hY + 30, 0, vh);
+    gg.addColorStop(0, mix("#e2c184", "#2a2440", sk.tint * 0.55)); gg.addColorStop(1, mix("#c69d60", "#1e1832", sk.tint * 0.55));
+    ctx.fillStyle = gg; ctx.fillRect(0, hY + 30, vw, vh);
+    if (this.grainPat) {
+      ctx.save(); ctx.globalAlpha = 0.45 * (1 - sk.tint * 0.5); ctx.globalCompositeOperation = "overlay";
+      ctx.fillStyle = this.grainPat; ctx.fillRect(0, hY + 30, vw, vh - hY - 30); ctx.restore();
+    }
 
     // camera + screen shake
     const cam = this.camera(state, vw, vh);
     if (this.shake > 0.1) { cam.ox += (Math.random() - 0.5) * this.shake; cam.oy += (Math.random() - 0.5) * this.shake; this.shake *= 0.86; }
     const g = cam.g;
 
-    // construction-site platform
+    // construction-site platform + the pyramid's cast shadow
     this._platform(ctx, cam, g, sk);
+    this._castShadow(ctx, cam, g, sk);
     // support city
     this._city(ctx, cam, g, state, sk);
 
-    // pyramid: cached completed layers
-    this._rebuildCache(cam, state);
-    ctx.drawImage(this.cache, cam.ox + this.cacheOffX, cam.oy + this.cacheOffY);
+    // pyramid: cached completed layers (rendered at device resolution → crisp)
+    this._rebuildCache(cam, state, dpr);
+    ctx.drawImage(this.cache, cam.ox + this.cacheOffX, cam.oy + this.cacheOffY, this.cacheW, this.cacheH);
 
     // active (partial) layer — with a faint "foundation" ghost of unbuilt cells
     if (!state.complete) {
@@ -259,6 +332,15 @@ export class Renderer {
 
     // night tint over the whole scene
     if (sk.tint > 0.01) { ctx.fillStyle = `rgba(10,16,44,${sk.tint * 0.42})`; ctx.fillRect(0, 0, vw, vh); }
+
+    // post: subtle film grain + vignette for a graded, filmic look
+    if (this.grainPat) {
+      ctx.save(); ctx.globalAlpha = 0.045; ctx.globalCompositeOperation = "overlay";
+      ctx.fillStyle = this.grainPat; ctx.fillRect(0, 0, vw, vh); ctx.restore();
+    }
+    const vg = ctx.createRadialGradient(vw / 2, vh * 0.46, Math.min(vw, vh) * 0.36, vw / 2, vh * 0.52, Math.max(vw, vh) * 0.76);
+    vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(10,6,2,0.34)");
+    ctx.fillStyle = vg; ctx.fillRect(0, 0, vw, vh);
 
     // floating bursts
     for (let i = this.bursts.length - 1; i >= 0; i--) {
