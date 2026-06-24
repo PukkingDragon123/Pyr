@@ -133,10 +133,81 @@ export class UI {
     this.tip = el("div", "tip", STR.startTip);
     r.appendChild(this.tip);
 
+    // ---- whip button (active speed surge) ----
+    this.whipBtn = el("button", "whipbtn", `<span class="ic">${icon("overseer")}</span><span class="wl">${STR.whip}</span>`);
+    this.whipBtn.onclick = () => this.app.crackWhip();
+    r.appendChild(this.whipBtn);
+
+    // ---- center reward popup ----
+    this.popupEl = el("div", "popup"); r.appendChild(this.popupEl);
+
+    // ---- tutorial ----
+    this.tutEl = el("div", "tut hidden"); r.appendChild(this.tutEl);
+    this._tutStep = -1;
+
     // ---- modals ----
     this._buildModals();
     this._setTab("resource");
     this._syncQty();
+  }
+
+  popup(text, cls) {
+    this.popupEl.textContent = text;
+    this.popupEl.className = "popup " + (cls || "") + " show";
+    clearTimeout(this._popupT);
+    this._popupT = setTimeout(() => { this.popupEl.className = "popup " + (cls || ""); }, 1500);
+  }
+
+  // ---- guided tutorial ----
+  _tutUpdate(state) {
+    if (state.tutorial.done) { this.tutEl.classList.add("hidden"); this._clearGlow(); return; }
+    const step = state.tutorial.step;
+    const steps = STR.tut.steps;
+    // auto-advance conditions
+    const cond = [
+      () => state.stats.taps >= 4,
+      () => (state.buildings.quarry || 0) >= 2,
+      () => (state.workers.laborer || 0) >= 4,
+      () => state.whip && state.whip.ever,
+      () => false,
+    ];
+    if (step < cond.length && cond[step] && cond[step]()) { this._tutAdvance(state); return; }
+    if (this._tutStep !== step) { this._tutRender(state, step, steps[step]); this._tutStep = step; }
+  }
+  _tutAdvance(state) {
+    if (state.tutorial.step >= STR.tut.steps.length - 1) { this._tutFinish(state); return; }
+    state.tutorial.step++; this._tutStep = -1; this.app.saveNow();
+  }
+  _tutFinish(state) {
+    state.tutorial.done = true; this.tutEl.classList.add("hidden"); this._clearGlow(); this.app.saveNow();
+  }
+  _tutRender(state, step, data) {
+    this._clearGlow();
+    if (step === 1) { this._setTab("resource"); this._glow(this.tabBtns.resource); }
+    else if (step === 2) { this._setTab("crew"); this._glow(this.tabBtns.crew); }
+    else if (step === 3) { this._glow(this.whipBtn); }
+    const last = step >= STR.tut.steps.length - 1;
+    this.tutEl.innerHTML = `<div class="tut-step">${step + 1}/${STR.tut.steps.length}</div>
+      <h3>${data.title}</h3><p>${data.body}</p>`;
+    const row = el("div", "tut-btns");
+    const skip = el("button", "btn", STR.tut.skip); skip.onclick = () => this._tutFinish(state);
+    const next = el("button", "btn primary", last ? STR.tut.done : STR.tut.next);
+    next.onclick = () => this._tutAdvance(state);
+    row.append(skip, next); this.tutEl.appendChild(row);
+    this.tutEl.classList.remove("hidden");
+  }
+  _glow(elm) { if (elm) elm.classList.add("tut-glow"); this._glowed = elm; }
+  _clearGlow() { if (this._glowed) this._glowed.classList.remove("tut-glow"); this._glowed = null; }
+
+  _updateWhip(state) {
+    const w = state.whip || { boostT: 0, cd: 0 };
+    const active = w.boostT > 0, ready = w.cd <= 0;
+    this.whipBtn.classList.toggle("active", active);
+    this.whipBtn.classList.toggle("cooling", !ready && !active);
+    const lbl = this.whipBtn.querySelector(".wl");
+    if (active) lbl.textContent = STR.whipGo;
+    else if (!ready) lbl.textContent = STR.whipCd(Math.ceil(w.cd));
+    else lbl.textContent = STR.whip;
   }
 
   _buildModals() {
@@ -385,7 +456,10 @@ export class UI {
     this._log(state);
 
     // tip
-    this.tip.classList.toggle("hidden", state.stats.taps > 2 || state.stats.totalBlocksAllTime > 10);
+    this._updateWhip(state);
+    this._tutUpdate(state);
+    const tutActive = !state.tutorial.done;
+    this.tip.classList.toggle("hidden", tutActive || state.stats.taps > 2 || state.stats.totalBlocksAllTime > 10);
   }
 
   _banner(state, stats) {

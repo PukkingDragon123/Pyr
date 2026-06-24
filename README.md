@@ -13,13 +13,21 @@ Relaxing to play, on desktop, mobile (touch), or with a gamepad.
 
 ## ▶ Play
 
-**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=1**
+**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=2**
 
 (Served straight from this branch via raw.githack.com — bump the `?v=` number to bust the cache after updates.)
+
+A short **tutorial** walks new pharaohs through the first stones, the first
+quarry, the first crew, and the whip.
 
 ## How to play
 
 - **Tap the pyramid** to lay stone by hand (the click phase).
+- **Crack the whip** (button, bottom-center) for a quick speed surge — your
+  overseer drives the gangs and everyone races for a few seconds.
+- Watch a **living crew**: workers walk up the ramp hauling blocks, **bend down
+  to set them**, walk back, and rest between loads, kicking up sand as they go;
+  oxen, elephants and crocodiles roam the site.
 - Build **quarries, farms and wells** for the six resources, and hire **crews**
   to haul and set blocks automatically (the idle phase).
 - Construction runs at the **slowest of Supply, Transport and Placement** — the

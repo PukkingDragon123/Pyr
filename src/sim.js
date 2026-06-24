@@ -11,6 +11,17 @@ import {
 import { nextRand, rangeRand, intRand } from "./rng.js";
 
 export const BASE_WORKER_CAP = 5;
+export const WHIP_MULT = 1.7, WHIP_DUR = 10, WHIP_CD = 22;
+
+// Active "crack the whip" surge — a temporary speed boost on a cooldown.
+export function crackWhip(s) {
+  if (!s.whip) s.whip = { boostT: 0, cd: 0 };
+  if (s.whip.cd > 0) return false;
+  s.whip.boostT = WHIP_DUR; s.whip.cd = WHIP_CD; s.whip.ever = true;
+  if (!s._fx) s._fx = [];
+  s._fx.push({ type: "whip" });
+  return true;
+}
 
 const byId = (list) => { const m = {}; for (const x of list) m[x.id] = x; return m; };
 export const B = byId(BUILDINGS);
@@ -88,18 +99,19 @@ export function computeStats(s) {
     upWater += (w.upkeep.water || 0) * n * waterUpMult;
   }
 
-  // chain rates (blocks/s)
+  // chain rates (blocks/s) — the whip gives a temporary speed surge
+  const whipMult = (s.whip && s.whip.boostT > 0) ? WHIP_MULT : 1;
   const placeWeather = fx.placementMult || 1;
-  const placement = basePlacement * workerEff * placeWeather * globalMult;
+  const placement = basePlacement * workerEff * placeWeather * globalMult * whipMult;
   const transportActive = !hasEvent(s, "ramp_collapse");
   const transport = transportBase * (1 + engineerPct) * (1 + blessVal(s, "divine_engineering"))
-    * (fx.transportMult || 1) * (transportActive ? 1 : 0) * globalMult;
+    * (fx.transportMult || 1) * (transportActive ? 1 : 0) * globalMult * whipMult;
 
   const lpb = Math.max(1, LIMESTONE_PER_BLOCK * (1 - blessVal(s, "master_masons")));
   const supplySustain = prod.limestone / lpb;
 
   const clickPower = Math.max(1, Math.round(
-    (BASE_CLICK) * (1 + blessVal(s, "sun_blessing")) * (1 + basePlacement * 0.25) * globalMult
+    (BASE_CLICK) * (1 + blessVal(s, "sun_blessing")) * (1 + basePlacement * 0.25) * globalMult * whipMult
   ));
 
   // bottleneck = the smallest sustained stage (this is what caps throughput)
@@ -235,6 +247,7 @@ export function step(s, dt) {
   if (!s.cd) s.cd = {};
   s.clock += dt;
   s.stats.playSeconds += dt;
+  if (s.whip) { if (s.whip.boostT > 0) s.whip.boostT -= dt; if (s.whip.cd > 0) s.whip.cd -= dt; }
 
   const st = computeStats(s);
 

@@ -84,4 +84,22 @@ export const STR = {
   unlocked: (n) => `Unlocked: ${n}`,
   needLimestone: "Not enough limestone to lay a stone.",
   dynastyToast: (n) => `A new dynasty begins — ${n}`,
+
+  whip: "Crack the Whip!",
+  whipGo: "FASTER!",
+  whipCd: (s) => `Whip · ${s}s`,
+  layerDone: (n) => `Layer ${n} complete!`,
+
+  tut: {
+    skip: "Skip",
+    next: "Next",
+    done: "Let's build!",
+    steps: [
+      { title: "Welcome, Pharaoh", body: "Tap the rising pyramid to lay stones with your own hand." },
+      { title: "Dig limestone", body: "Open Quarries and build a Limestone Quarry — stone feeds the whole build." },
+      { title: "Hire a crew", body: "In Crew, hire a Laborer. Your workers will haul and place blocks on their own." },
+      { title: "Crack the whip", body: "Tap the whip button to make every worker race — a quick speed surge!" },
+      { title: "Raise a wonder", body: "Fill every layer to set the golden capstone, then begin a New Dynasty. Have fun!" },
+    ],
+  },
 };

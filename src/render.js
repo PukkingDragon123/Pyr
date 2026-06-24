@@ -3,12 +3,13 @@
 // weather and tint redraw per frame (performance law).
 import { wonderFor, wonderGeom } from "./data.js";
 import { project, cubeFaces, layerSide, layerCells, pyramidBounds } from "./iso.js";
-import { drawHuman, drawAnimal } from "./sprites.js";
+import { drawHuman, drawAnimal, drawWhip } from "./sprites.js";
 
 export const DAY_LEN = 200; // seconds per full day/night cycle
 
 const SKINS = ["#caa06a", "#b5895a", "#9a6f44", "#d8b483", "#a87a4c"];
 const CLOTHS = ["#3a6ea5", "#c0392b", "#d4a017", "#2c8c84", "#7b4ea0"];
+const OVERSEER_PAL = { skin: "#9a6f44", skinDark: "#6e4f30", cloth: "#b8202a" };
 function shadow(ctx, x, y, rx) {
   ctx.fillStyle = "rgba(40,26,12,0.2)";
   ctx.beginPath(); ctx.ellipse(x, y, rx, rx * 0.4, 0, 0, 7); ctx.fill();
@@ -62,10 +63,47 @@ export class Renderer {
     this.cacheKey = ""; this.bounds = null; this.pad = 40;
     this.workers = []; this.animals = []; this.bursts = [];
     this.sand = []; this.rain = []; this.flood = 0;
+    this.puffs = []; this.rings = []; this.motes = [];
     for (let i = 0; i < 220; i++) this.sand.push({ x: 0, y: 0, vx: 0, vy: 0, life: 0 });
     for (let i = 0; i < 160; i++) this.rain.push({ x: 0, y: 0, v: 0, life: 0 });
+    for (let i = 0; i < 26; i++) this.motes.push({ x: Math.random(), y: Math.random(), sp: 0.3 + Math.random() * 0.7, sz: 1 + Math.random() * 1.6, ph: Math.random() * 6.28 });
     this.huts = this._layoutCity();
-    this.shake = 0;
+    this.shake = 0; this.overseerCrack = 0; this.whipFlash = 0; this._osTimer = 0;
+  }
+
+  // ---- VFX: dust puffs, expanding rings, screen punch ----
+  spawnDust(x, y, n, opt) {
+    opt = opt || {};
+    for (let i = 0; i < n; i++) {
+      if (this.puffs.length > 170) this.puffs.shift();
+      const a = Math.random() * 6.283, sp = (opt.sp || 16) * (0.4 + Math.random());
+      this.puffs.push({ x, y, vx: Math.cos(a) * sp * (opt.spread || 1), vy: -Math.abs(Math.sin(a)) * sp - (opt.up || 6),
+        life: 0.4 + Math.random() * (opt.life || 0.4), r: (opt.r || 4) * (0.6 + Math.random()), c: opt.c || "237,212,160" });
+    }
+  }
+  ring(x, y, color) { this.rings.push({ x, y, r: 4, life: 1, color: color || "#f3c44e" }); }
+  whipCrack(big) { this.overseerCrack = 1; this.whipFlash = big ? 1 : 0.4; if (big) this._osTimer = 0.6; }
+  celebrate(x, y) {
+    this.ring(x, y, "#ffe39a"); this.ring(x, y, "#f3c44e");
+    this.spawnDust(x, y, 18, { sp: 60, up: 34, r: 5, life: 0.85, c: "243,224,170" });
+    this.kick(4);
+  }
+  celebrateLayer() { if (this._topX != null) this.celebrate(this._topX, this._topY); else this.kick(4); }
+  _updateFx(ctx, dt) {
+    for (let i = this.puffs.length - 1; i >= 0; i--) {
+      const p = this.puffs[i]; p.life -= dt; if (p.life <= 0) { this.puffs.splice(i, 1); continue; }
+      p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 24 * dt; p.vx *= 0.95;
+      ctx.fillStyle = `rgba(${p.c},${Math.min(0.55, p.life) * 0.85})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (1.5 - p.life), 0, 7); ctx.fill();
+    }
+    for (let i = this.rings.length - 1; i >= 0; i--) {
+      const r = this.rings[i]; r.life -= dt * 1.4; if (r.life <= 0) { this.rings.splice(i, 1); continue; }
+      r.r += 130 * dt;
+      ctx.strokeStyle = r.color; ctx.globalAlpha = Math.max(0, r.life) * 0.55; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    if (this.overseerCrack > 0) this.overseerCrack = Math.max(0, this.overseerCrack - dt * 2.4);
+    if (this.whipFlash > 0) this.whipFlash = Math.max(0, this.whipFlash - dt * 1.6);
   }
 
   _layoutCity() {
@@ -207,6 +245,18 @@ export class Renderer {
     // weather
     this._weather(ctx, cam, state, stats, dt, vw, vh, hY);
 
+    // dust, rings & ambient drifting sand over the scene
+    this._updateFx(ctx, dt);
+    ctx.fillStyle = `rgba(235,215,170,${0.2 * (1 - sk.tint)})`;
+    for (const m of this.motes) {
+      m.x += (m.sp * 0.04 + 0.02) * dt; if (m.x > 1.05) m.x -= 1.1;
+      const mx = m.x * (vw + 40) - 20, my = hY * 0.7 + m.y * (vh - hY * 0.7);
+      ctx.fillRect(mx, my + Math.sin(state.clock * 0.8 + m.ph) * 4, m.sz, m.sz);
+    }
+
+    // whip-crack screen flash
+    if (this.whipFlash > 0.01) { ctx.fillStyle = `rgba(255,250,220,${this.whipFlash * 0.12})`; ctx.fillRect(0, 0, vw, vh); }
+
     // night tint over the whole scene
     if (sk.tint > 0.01) { ctx.fillStyle = `rgba(10,16,44,${sk.tint * 0.42})`; ctx.fillRect(0, 0, vw, vh); }
 
@@ -286,7 +336,9 @@ export class Renderer {
   _newWorker() {
     const i = (Math.random() * SKINS.length) | 0;
     return {
-      t: Math.random(), lane: (Math.random() - 0.5) * 0.9, sp: 0.12 + Math.random() * 0.12, ph: Math.random(),
+      state: "haul", t: Math.random(), phase: Math.random(), timer: 0, placed: false,
+      lane: (Math.random() - 0.5), sp: 0.1 + Math.random() * 0.1, animT: Math.random() * 10,
+      restSpot: (Math.random() - 0.5), restChance: 0.22 + Math.random() * 0.28,
       pal: { skin: SKINS[i], skinDark: mix(SKINS[i], "#000", 0.28), cloth: CLOTHS[(Math.random() * CLOTHS.length) | 0] },
     };
   }
@@ -295,34 +347,75 @@ export class Renderer {
     return { t: Math.random(), lane: (Math.random() - 0.5) * 0.6, sp: 0.05 + Math.random() * 0.05, ph: Math.random(), type: types[i % types.length] };
   }
 
+  // Living crew: walk up hauling → bend to place → walk back → sometimes rest.
   _workers(ctx, cam, g, state, stats, dt) {
     const { foot, head } = this._rampPath(cam, g, state);
     const nx = -(head.y - foot.y), ny = (head.x - foot.x);
     const len = Math.hypot(nx, ny) || 1; const ux = nx / len, uy = ny / len; const rw = cam.u * 1.0;
-    // ramp body + side rail
     poly(ctx, [
       { x: foot.x - ux * rw, y: foot.y - uy * rw }, { x: foot.x + ux * rw, y: foot.y + uy * rw },
       { x: head.x + ux * rw * 0.45, y: head.y + uy * rw * 0.45 }, { x: head.x - ux * rw * 0.45, y: head.y - uy * rw * 0.45 },
     ], "rgba(150,110,60,.5)");
 
-    const u = cam.u;
+    const u = cam.u, dir = head.x >= foot.x ? 1 : -1, hsize = Math.max(11, u * 1.4);
+    this._topX = head.x; this._topY = head.y;
+    const whip = !!(state.whip && state.whip.boostT > 0);
     const active = !state.complete && (state._lastFlow || 0) > 0.0001;
-    const target = state.complete ? 5 : Math.max(active ? 6 : 3, Math.min(55, Math.round(5 + Math.sqrt(stats.placement || 0) * 1.1)));
+    const target = state.complete ? 5 : Math.max(active ? 6 : 3, Math.min(48, Math.round(5 + Math.sqrt(stats.placement || 0))));
     while (this.workers.length < target) this.workers.push(this._newWorker());
     while (this.workers.length > target) this.workers.pop();
 
-    const speedScale = state.complete ? 0.25 : (0.4 + Math.min(2, (stats.rateCap || 0) * 0.02));
-    const dir = head.x >= foot.x ? 1 : -1;
-    const hsize = Math.max(11, u * 1.35);
-    const sorted = this.workers.slice().sort((a, b) => b.t - a.t); // far (high t) first
-    for (const w of sorted) {
-      w.t += w.sp * speedScale * dt; if (w.t > 1) w.t -= 1;
-      const x = lerp(foot.x, head.x, w.t) + ux * w.lane * rw;
-      const y = lerp(foot.y, head.y, w.t) + uy * w.lane * rw;
-      shadow(ctx, x, y, hsize * 0.22);
-      drawHuman(ctx, x, y, hsize, w.t * 7 + w.ph, dir, w.t < 0.92 && !state.complete, w.pal);
+    const boost = (state.complete ? 0.25 : (0.45 + Math.min(2, (stats.rateCap || 0) * 0.02))) * (whip ? 1.7 : 1);
+    const placeDur = 0.55 / (whip ? 1.5 : 1);
+    const restX = foot.x - ux * rw * 2.6, restY = foot.y - uy * rw * 2.6;
+    const entries = [];
+    for (const w of this.workers) {
+      w.animT += dt;
+      const pose = { dir, pal: w.pal, t: w.animT, moving: false, carry: false, bend: 0, wipe: 0, phase: w.phase };
+      let x, y;
+      if (w.state === "haul") {
+        w.t += w.sp * boost * dt; w.phase += w.sp * boost * dt * 7;
+        if (w.t >= 1) { w.t = 1; w.state = "place"; w.timer = placeDur; w.placed = false; }
+        x = lerp(foot.x, head.x, w.t) + ux * w.lane * rw; y = lerp(foot.y, head.y, w.t) + uy * w.lane * rw;
+        pose.moving = true; pose.carry = true;
+        if (Math.random() < dt * 2.5 * boost) this.spawnDust(x, y, 1, { sp: 6, up: 3, r: 2.2, life: 0.35 });
+      } else if (w.state === "place") {
+        w.timer -= dt; const p = 1 - Math.max(0, w.timer) / placeDur;
+        pose.bend = Math.sin(Math.min(1, p) * Math.PI); pose.carry = p < 0.55;
+        x = head.x + ux * w.lane * rw; y = head.y + uy * w.lane * rw;
+        if (!w.placed && p > 0.5) { w.placed = true; this.spawnDust(x, y + hsize * 0.04, 5, { sp: 22, up: 8, r: 3, life: 0.5 }); }
+        if (w.timer <= 0) w.state = "return";
+      } else if (w.state === "return") {
+        w.t -= w.sp * boost * 1.5 * dt; w.phase += w.sp * boost * 1.5 * dt * 7;
+        if (w.t <= 0) { w.t = 0; if (Math.random() < w.restChance) { w.state = "rest"; w.timer = 2 + Math.random() * 4; } else w.state = "haul"; }
+        x = lerp(foot.x, head.x, w.t) + ux * w.lane * rw; y = lerp(foot.y, head.y, w.t) + uy * w.lane * rw;
+        pose.moving = true;
+      } else { // rest
+        w.timer -= dt;
+        x = restX + w.restSpot * rw * 2; y = restY + w.restSpot * rw * 0.5;
+        pose.wipe = (w.timer % 2.6 < 0.9) ? 1 : 0;
+        if (w.timer <= 0) w.state = "haul";
+      }
+      entries.push({ x, y, pose });
     }
+    entries.sort((a, b) => a.y - b.y);
+    for (const e of entries) { shadow(ctx, e.x, e.y, hsize * 0.22); drawHuman(ctx, e.x, e.y, hsize, e.pose); }
+
+    this._overseer(ctx, foot, ux, uy, rw, hsize, dir, state, dt);
     this._animals(ctx, cam, g, state, stats, dt);
+  }
+
+  _overseer(ctx, foot, ux, uy, rw, hsize, dir, state, dt) {
+    const ox = foot.x - ux * rw * 1.25, oy = foot.y - uy * rw * 1.25;
+    const whip = !!(state.whip && state.whip.boostT > 0);
+    this._osTimer -= dt;
+    if (this._osTimer <= 0) {
+      this.overseerCrack = 1; this._osTimer = whip ? 0.7 : 3 + Math.random() * 2.5;
+      if (whip) this.spawnDust(ox + dir * hsize * 0.7, oy, 3, { sp: 14, up: 5, r: 2.4, life: 0.35 });
+    }
+    shadow(ctx, ox, oy, hsize * 0.24);
+    drawHuman(ctx, ox, oy, hsize * 1.06, { dir, pal: OVERSEER_PAL, t: state.clock, moving: false, carry: false, bend: 0, wipe: 0, phase: 0 });
+    drawWhip(ctx, ox, oy, hsize * 1.06, dir, this.overseerCrack);
   }
 
   _animals(ctx, cam, g, state, stats, dt) {

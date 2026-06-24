@@ -5,7 +5,7 @@ import { BUILDINGS, WORKERS, BLESSINGS, DISASTERS, AUTOSAVE_MS, wonderFor } from
 import {
   step, tapPlace, computeStats, buyBuilding, buyWorker, buyBlessing,
   doPrestige, legacyGain, repairRamp, crownSuccessor, isUnlocked,
-  freshlyUnlocked, simulateOffline,
+  freshlyUnlocked, simulateOffline, crackWhip,
 } from "./sim.js";
 import { load, save, wipe, exportSave, importSave } from "./save.js";
 import { newGame } from "./state.js";
@@ -68,6 +68,10 @@ const app = {
   },
   repairRamp: () => { if (repairRamp(state)) audio.play("buy"); },
   crownSuccessor: () => { if (crownSuccessor(state)) audio.play("buy"); },
+  crackWhip: () => {
+    ensureAudio();
+    if (crackWhip(state)) { audio.play("whip"); renderer.whipCrack(true); ui.popup(STR.whipGo, "go"); }
+  },
   toggleMute: (m) => { state.settings.muted = m; audio.setMuted(m); },
   toggleMusic: (on) => { state.settings.music = on; audio.setMusic(on); },
   saveNow: () => save(state),
@@ -89,6 +93,7 @@ const app = {
     const built = tapPlace(state);
     if (built > 0) {
       renderer.addBurst(x, y, "+" + fmt(built), "#ffe6a3");
+      renderer.spawnDust(x, y + 6, 4, { sp: 26, up: 10, r: 3, life: 0.45 });
       renderer.kick(1.5);
       audio.play(state.stats.taps % 3 === 0 ? "place" : "tap");
     } else {
@@ -176,13 +181,17 @@ function pollPad(dt) {
 function drainFx() {
   const fx = state._fx; if (!fx || !fx.length) return;
   for (const f of fx) {
-    if (f.type === "layer") { audio.play("layer"); renderer.kick(2.5); }
-    else if (f.type === "complete") {
+    if (f.type === "layer") {
+      audio.play("layer"); renderer.celebrateLayer();
+      ui.popup(STR.layerDone(f.layer), "good");
+    } else if (f.type === "complete") {
       audio.play("capstone"); renderer.kick(9);
       if (ceremonyShownFor !== state.wonderIndex) {
         ceremonyShownFor = state.wonderIndex;
         ui.showCeremony(wonderFor(state.wonderIndex).name, legacyGain(state));
       }
+    } else if (f.type === "whip") {
+      renderer.whipCrack(true);
     } else if (f.type === "disaster") {
       audio.play("disaster"); renderer.kick(5);
       if (DISASTER_NAME[f.id]) ui.toast(DISASTER_NAME[f.id], "bad");

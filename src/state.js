@@ -65,6 +65,8 @@ export function newGame() {
     clock: 0,
     log: [],
     seenUnlocks: {},
+    whip: { boostT: 0, cd: 0, ever: false },
+    tutorial: { step: 0, done: false },
     settings: { muted: false, music: true, qty: 1, dev: false },
     stats: {
       totalBlocksAllTime: 0, totalBlocksThisDynasty: 0, dynasties: 0,

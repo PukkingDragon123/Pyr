@@ -118,6 +118,11 @@ export class Audio {
       case "error":
         this._tone(110, "sine", t, 0.004, 0.12, 0.3);
         break;
+      case "whip":
+        this._noiseBurst(t, 0.05, 0.5, 5000, "highpass");      // the crack
+        this._tone(900, "sawtooth", t, 0.002, 0.05, 0.25);
+        this._tone(260, "triangle", t + 0.02, 0.003, 0.12, 0.25);
+        break;
     }
   }
 

@@ -21,6 +21,7 @@ function showcase() {
   for (const id of ["village", "granary", "storage_yard", "docks", "temple"]) for (let i = 0; i < 3; i++) buyBuilding(s, id);
   s.workers.laborer = 14; s.workers.cutter = 6; s.workers.engineer = 3;
   s.layer = 2; s.blocksInLayer = Math.floor(blocksForLayer(0, 2) / 2);
+  s.tutorial = { step: 0, done: true };
   s.lastSaved = Date.now();
   return JSON.stringify(s);
 }
@@ -45,8 +46,13 @@ async function run(label, vp, shot, mobile, seed) {
     chips: document.querySelectorAll(".chip").length,
     items: document.querySelectorAll(".item").length,
     tabs: document.querySelectorAll(".tab").length,
+    whip: !!document.querySelector(".whipbtn"),
+    tutorial: !document.querySelector(".tut")?.classList.contains("hidden"),
   }));
   console.log(`[${label}]`, JSON.stringify(info));
+  // exercise the whip button
+  const wb = await page.$(".whipbtn"); if (wb) await wb.click();
+  await page.waitForTimeout(120);
 
   // tap the canvas a few times (place stones) + switch a tab + buy first item
   const c = await page.$("#c"); const box = await c.boundingBox();
