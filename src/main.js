@@ -8,20 +8,18 @@ import {
 } from "./sim.js";
 import { load, save, wipe, exportSave, importSave } from "./save.js";
 import { newGame } from "./state.js";
-import { Renderer } from "./render.js";
+import { Renderer } from "./render3d.js";
 import { Audio } from "./audio.js";
 import { UI } from "./ui.js";
 import { fmt } from "./format.js";
 
 const STEP = 1000 / 60;
-const DPR_CAP = 1.5;
 
 // ---- state / systems ----
 let { state, offline } = load();
 primeUnlocks(state);
 
 const canvas = document.getElementById("c");
-const ctx = canvas.getContext("2d");
 const renderer = new Renderer(canvas);
 const audio = new Audio();
 let lastStats = computeStats(state);
@@ -31,13 +29,11 @@ function primeUnlocks(s) {
 }
 
 // ---- responsive canvas ----
+// The WebGL renderer owns the backing buffer (set via renderer.frame → _resize);
+// here we only keep the canvas CSS box filling the viewport.
 function resize() {
-  const dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
-  canvas.width = Math.floor(innerWidth * dpr);
-  canvas.height = Math.floor(innerHeight * dpr);
   canvas.style.width = innerWidth + "px";
   canvas.style.height = innerHeight + "px";
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 addEventListener("resize", resize);
 addEventListener("orientationchange", resize);

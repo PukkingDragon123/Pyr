@@ -23,7 +23,9 @@ function showcase() {
 const SAVE = showcase();
 const SP = "/tmp/claude-0/-home-user-Pyr/ccb84bd0-96dd-5e04-8d22-3015a984d891/scratchpad/";
 
-const browser = await chromium.launch();
+const browser = await chromium.launch({
+  args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
+});
 const ctx = await browser.newContext({ viewport: { width: 1120, height: 780 }, deviceScaleFactor: 2 });
 const page = await ctx.newPage();
 const errs = [];

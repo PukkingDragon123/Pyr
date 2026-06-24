@@ -27,7 +27,10 @@ function showcase() {
 }
 const SAVE = showcase();
 
-const browser = await chromium.launch();
+// Headless Chromium needs software GL (SwiftShader) to give us a WebGL context.
+const browser = await chromium.launch({
+  args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
+});
 
 async function run(label, vp, shot, mobile, seed) {
   const ctx = await browser.newContext({ viewport: vp, isMobile: !!mobile, hasTouch: !!mobile });

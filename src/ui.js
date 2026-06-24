@@ -373,11 +373,16 @@ export class UI {
     // resources
     for (const k of RES) {
       const ref = this.resChips[k];
+      const cap = stats.caps ? stats.caps[k] : Infinity;
       ref.v.textContent = fmt(state.res[k]);
       let net = stats.prod[k] || 0;
       if (k === "limestone") net -= (state._lastFlow || 0) * stats.lpb;
-      ref.net.textContent = (net >= 0 ? "+" : "") + fmt(net) + STR.res.perSec;
-      ref.net.className = "net " + (net >= -1e-6 ? "up" : "down");
+      // at cap, surplus production is wasted — show "FULL" instead of a phantom +rate
+      const full = Number.isFinite(cap) && state.res[k] >= cap - 1 && net > 0;
+      ref.net.textContent = full ? STR.res.full : (net >= 0 ? "+" : "") + fmt(net) + STR.res.perSec;
+      ref.net.className = "net " + (full ? "full" : net >= -1e-6 ? "up" : "down");
+      ref.chip.classList.toggle("isfull", full);
+      ref.chip.title = RES_META[k].name + " · " + fmt(Math.floor(state.res[k])) + " / " + fmt(cap);
     }
     this.legacyV.textContent = fmt(state.legacy);
 

@@ -13,7 +13,7 @@ Relaxing to play, on desktop, mobile (touch), or with a gamepad.
 
 ## ▶ Play
 
-**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=5**
+**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=6**
 
 (Served straight from this branch via raw.githack.com — bump the `?v=` number to bust the cache after updates.)
 
@@ -65,14 +65,17 @@ logic.js            # solo rules stub (for optional platform deploy)
 strings.js          # all UI chrome text (localization-ready)
 styles.css          # polished, responsive mobile-game UI
 assets/             # thumbnail.png, favicon.png (procedurally rendered)
+vendor/
+  three.module.js   # vendored Three.js r160 (no CDN / build step)
 src/
   main.js           # bootstrap, fixed-timestep loop, input wiring
   data.js           # ALL balance numbers & content
   state.js          # game state model + cost/cap helpers
   sim.js            # simulation tick, the build chain, actions, prestige
-  render.js         # isometric Canvas2D renderer (cached layers + live scene)
-  sprites.js        # procedurally animated workers + animals (ox/elephant/croc)
-  iso.js            # isometric projection & pyramid geometry
+  render3d.js       # real 3D low-poly renderer (Three.js): lit/shadowed scene,
+                    #   instanced pyramid, animated crews & animals, day/night
+  render.js         # legacy isometric Canvas2D renderer (kept for reference)
+  iso.js            # pyramid geometry (layer cells) shared by the renderer
   audio.js          # procedural Web Audio SFX + generative ambient music
   ui.js             # DOM HUD / build menus / modals
   icons.js, rng.js, format.js
@@ -82,24 +85,29 @@ tools/              # make_card_art.py (deploy art), test_sim.mjs, smoke.mjs, cl
 
 ## Tech notes
 
-- **Pure vanilla** — no frameworks or runtime dependencies; renders on one
-  `<canvas>` with a DOM HUD overlaid.
-- **Animated crews & animals** are fully procedural (sine-driven walk cycles,
-  leg gaits, carried blocks) — no sprite sheets.
-- **Cinematic rendering:** directional lighting and ambient occlusion on every
-  block, a cast shadow under the pyramid, layered sky with sun bloom + horizon
-  glow + drifting clouds, atmospheric haze, a grain-textured ground, and a
-  full-frame film-grain + vignette post pass. The cached pyramid renders at
-  device resolution so it stays crisp.
-- **Performance:** completed pyramid layers are cached to an offscreen canvas
-  (one blit/frame); only the active layer, capstone, workers, animals, weather
-  and tint redraw. Sprites/particles are pooled and capped; DPR capped at 1.5.
-  Fixed-timestep sim with a seeded RNG; logic separate from rendering.
+- **Real 3D, low-poly** — rendered with **Three.js** (r160, *vendored* — no CDN
+  and no build step) on a single WebGL `<canvas>` with a DOM HUD overlaid. The
+  only runtime dependency, committed straight into `vendor/`.
+- **Lit, shadowed scene:** an isometric orthographic camera, a hemisphere +
+  directional sun with soft (PCF) shadow maps, ACES filmic tone-mapping, a
+  gradient sky dome and distance fog. A **day/night cycle** drifts the sky,
+  sun colour and light through morning, noon, dusk and night.
+- **The pyramid** is one `InstancedMesh` of stone cubes (per-block tint
+  variation so it reads as hand-laid stone, not a slab); cubes are only revealed
+  as workers actually deliver and set them — no teleporting bricks. The golden
+  capstone drops in on completion.
+- **Animated crews & animals** are procedural low-poly models: workers walk the
+  ramp, bend to place a block and walk back; oxen, elephants and crocodiles
+  roam smooth looped paths (no path-finding, so nothing ever gets stuck) with
+  gait bounce. Dust puffs and ground rings are pooled `Sprite`s.
+- **Performance:** instanced pyramid (one draw call), pooled FX, pixel-ratio
+  capped at 1.5. Fixed-timestep sim with a seeded RNG; logic fully separate from
+  rendering, so the simulation is deterministic and testable headless.
 - **Responsive & accessible:** touch / mouse / keyboard (physical key codes) /
   gamepad are all first-class; the layout reflows for phones.
-- **Art & audio:** the workspace was out of generation credits, so all art is
-  hand-crafted procedural Canvas2D in one committed style and all sound is
-  synthesized at runtime with the Web Audio API.
+- **Art & audio:** the workspace was out of generation credits, so every model
+  is built procedurally from primitives (flat-shaded low-poly) at runtime, and
+  all sound is synthesized at runtime with the Web Audio API — no asset files.
 
 ## Testing
 

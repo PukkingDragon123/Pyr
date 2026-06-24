@@ -42,6 +42,8 @@ svg.ic{width:1.15em;height:1.15em;vertical-align:-.18em;flex:0 0 auto}
 .chip .v{font-weight:800}
 .chip .net{font-size:10px;opacity:.92;font-weight:700}
 .chip .net.up{color:var(--good)} .chip .net.down{color:var(--bad)}
+.chip .net.full{color:#ffd27a;letter-spacing:.5px}
+.chip.isfull{border-color:rgba(243,196,78,.55);box-shadow:var(--hi),0 0 0 1px rgba(243,196,78,.35),0 2px 7px rgba(0,0,0,.28)}
 .chip.legacy{color:var(--gold);border-color:rgba(243,196,78,.42);background:linear-gradient(180deg,rgba(80,58,18,.7),var(--card))}
 .iconbtn{width:34px;height:34px;border-radius:12px;background:var(--card);border:1px solid var(--line);
   display:flex;align-items:center;justify-content:center;color:var(--gold);font-weight:800;font-size:16px;flex:0 0 auto;box-shadow:var(--hi)}

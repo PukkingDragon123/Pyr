@@ -13,7 +13,7 @@ export const STR = {
     blessing: "Permanent Pharaoh's blessings, bought with Legacy.",
   },
 
-  res: { perSec: "/s", net: "net" },
+  res: { perSec: "/s", net: "net", full: "FULL" },
   blocks: "Blocks placed",
   legacy: "Legacy",
   legacyShort: "Legacy",
