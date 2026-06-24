@@ -13,28 +13,29 @@ Relaxing to play, on desktop, mobile (touch), or with a gamepad.
 
 ## ▶ Play
 
-**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=3**
+**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=4**
 
 (Served straight from this branch via raw.githack.com — bump the `?v=` number to bust the cache after updates.)
 
-A short **tutorial** walks new pharaohs through the first stones, the first
-quarry, the first crew, and the whip.
+A short **tutorial** walks new pharaohs through the first quarry, the first
+crew, and the whip.
 
 ## How to play
 
-- **Tap the pyramid** to lay stone by hand (the click phase).
-- **Crack the whip** (button, bottom-center) for a quick speed surge — your
-  overseer drives the gangs and everyone races for a few seconds.
-- Watch a **living crew**: workers walk up the ramp hauling blocks, **bend down
-  to set them**, walk back, and rest between loads, kicking up sand as they go;
-  oxen, elephants and crocodiles roam the site.
-- Build **quarries, farms and wells** for the six resources, and hire **crews**
-  to haul and set blocks automatically (the idle phase).
-- Construction runs at the **slowest of Supply, Transport and Placement** — the
-  panel shows the bottleneck, and fixing it speeds everything up.
-- Crews eat food and drink water; weather (sandstorm, heat, the **Nile flood**,
-  rain) and the occasional disaster ripple the work — **priests, temples and
-  overseers** keep them mild. (Tuned gentle, so it stays relaxing.)
+It's a simple, relaxing builder:
+
+- **Build producers** — quarries, mines, farms and wells. Each one appears in
+  the desert and produces its resource (Cookie-Clicker style).
+- **Hire laborers** — every laborer is a worker who **actually walks a block up
+  the ramp and sets it in place** (no teleporting bricks). More laborers and
+  faster machines (sleds, cranes, ramps) = a faster build.
+- **Click a worker to crack the whip** — they sprint and everyone builds faster
+  for a few seconds. (No button — just tap the workers on the site.)
+- **Limestone** is the building material; if you run short the game tells you to
+  build more quarries.
+- A real **desert world** grows around you: the **Nile** with docks and
+  crocodiles, a **worker village & camps**, farms by the river, and every
+  building you buy shown for real.
 - Finish every layer to raise the **golden capstone**, then **found a New
   Dynasty** to keep your Legacy and build the next, greater wonder.
 
@@ -43,9 +44,9 @@ Step → Bent → Great → Golden → Black Obsidian → Floating Divine → an
 forever, each bigger than the last.
 
 ### Controls
-- **Tap / click** the pyramid — lay stone. **Drag** to pan, **scroll / pinch** to zoom.
-- **Space / Enter** — lay stone. **M** — mute. **+ / −** — zoom. **Esc** — close dialogs.
-- **Gamepad** — A button lays stone. Progress **auto-saves** and continues **while you're away**.
+- **Tap / click a worker** — crack the whip. **Drag** to pan, **scroll / pinch** to zoom.
+- **Space / Enter** — whip. **M** — mute. **+ / −** — zoom. **Esc** — close dialogs.
+- **Gamepad** — A button whips. Progress **auto-saves** and continues **while you're away**.
 
 ## Run locally
 

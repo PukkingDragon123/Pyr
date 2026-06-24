@@ -15,12 +15,12 @@ function showcase() {
   s.stats.totalBlocksAllTime = 400; s.stats.totalBlocksThisDynasty = 400;
   s.res.limestone = 5e5; s.res.wood = 5e4; s.res.granite = 8e3; s.res.copper = 8e3;
   s.res.food = 2e3; s.res.water = 2e3;
-  for (let i = 0; i < 10; i++) buyBuilding(s, "quarry");
+  for (let i = 0; i < 8; i++) buyBuilding(s, "quarry");
   for (const id of ["well", "farm", "lumber_camp", "granite_mine", "copper_mine"]) for (let i = 0; i < 4; i++) buyBuilding(s, id);
-  for (const id of ["wooden_rollers", "rope_winch", "sled"]) for (let i = 0; i < 5; i++) buyBuilding(s, id);
+  for (const id of ["wooden_rollers"]) for (let i = 0; i < 3; i++) buyBuilding(s, id);
   for (const id of ["village", "granary", "storage_yard", "docks", "temple"]) for (let i = 0; i < 3; i++) buyBuilding(s, id);
-  s.workers.laborer = 14; s.workers.cutter = 6; s.workers.engineer = 3;
-  s.layer = 2; s.blocksInLayer = Math.floor(blocksForLayer(0, 2) / 2);
+  s.workers.laborer = 9; s.workers.mason = 3; s.workers.engineer = 2; // modest so it won't finish mid-test
+  s.layer = 1; s.blocksInLayer = Math.floor(blocksForLayer(0, 1) * 0.4);
   s.tutorial = { step: 0, done: true };
   s.lastSaved = Date.now();
   return JSON.stringify(s);
@@ -46,17 +46,15 @@ async function run(label, vp, shot, mobile, seed) {
     chips: document.querySelectorAll(".chip").length,
     items: document.querySelectorAll(".item").length,
     tabs: document.querySelectorAll(".tab").length,
-    whip: !!document.querySelector(".whipbtn"),
     tutorial: !document.querySelector(".tut")?.classList.contains("hidden"),
   }));
   console.log(`[${label}]`, JSON.stringify(info));
-  // exercise the whip button
-  const wb = await page.$(".whipbtn"); if (wb) await wb.click();
-  await page.waitForTimeout(120);
+  const modalOpen = await page.evaluate(() => !document.querySelector(".modalwrap").classList.contains("hidden"));
+  if (modalOpen) { const h = await page.evaluate(() => document.querySelector(".modal h2")?.textContent || (document.querySelector(".modal")?.textContent || "").slice(0, 40)); console.log(`[${label}] MODAL OPEN: ${h}`); await page.keyboard.press("Escape"); await page.waitForTimeout(120); }
 
-  // tap the canvas a few times (place stones) + switch a tab + buy first item
+  // click the desert/workers a few times (whips workers) + switch a tab + buy first item
   const c = await page.$("#c"); const box = await c.boundingBox();
-  for (let i = 0; i < 6; i++) await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.62);
+  for (let i = 0; i < 6; i++) await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.58);
   await page.waitForTimeout(300);
   const crew = await page.$$(".tab"); if (crew[1]) await crew[1].click();
   await page.waitForTimeout(150);
@@ -64,8 +62,8 @@ async function run(label, vp, shot, mobile, seed) {
   await page.waitForTimeout(900);
 
   const after = await page.evaluate(() => ({
-    blocks: document.querySelector(".progtext")?.textContent || document.querySelector(".goal")?.textContent || "",
-    bottleneck: document.querySelector(".bottleneck")?.textContent || "",
+    goal: document.querySelector(".goal")?.textContent || "",
+    build: document.querySelector(".buildrate")?.textContent || "",
   }));
   console.log(`[${label}] after-input`, JSON.stringify(after));
 

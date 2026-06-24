@@ -1,9 +1,9 @@
 // ============================================================================
-// BALANCE DATA — all tunable numbers live here (game-design-system §9.5).
-// Names live here too so logic/render/ui hold no user-facing string literals.
+// BALANCE DATA — all tunable numbers + names live here.
+// Simple model: buildings PRODUCE resources; workers BUILD (haul blocks);
+// machines make building faster. No upkeep, no disasters — clean idle progression.
 // ============================================================================
 
-// Ordered resource keys.
 export const RES = ["limestone", "granite", "wood", "copper", "food", "water"];
 
 export const RES_META = {
@@ -15,132 +15,123 @@ export const RES_META = {
   water:     { name: "Water",     color: "#49b5d6", dark: "#2c7c97", icon: "water" },
 };
 
-// Base storage caps (raised by city storage buildings + Royal Treasury).
 export const BASE_CAPS = {
-  limestone: 6000, granite: 1500, wood: 3000, copper: 1500, food: 1800, water: 1800,
+  limestone: 8000, granite: 2000, wood: 4000, copper: 2000, food: 2500, water: 2500,
 };
 
-export const LIMESTONE_PER_BLOCK = 5; // reduced by stone cutters & Master Masons
-export const BASE_CLICK = 1;
+export const LIMESTONE_PER_BLOCK = 5; // reduced by Master Masons
+export const PER_BUILDER = 0.5;        // blocks/sec per builder before multipliers
 
 // ----------------------------------------------------------------------------
-// Buildings & machines. cat: resource | transport | city.
-// effect keys consumed by sim: produce{res}, transport, transportFlat,
-// workerCap, cap{res}, globalProd, morale, disasterMult.
-// cost scales as base * scale^owned.
+// Buildings. cat: resource | machine | city.  zone = where it appears in the world.
+// effect keys: produce{res}, buildSpeed (adds to the build multiplier),
+// prodAll (adds to global production %), cap{res}.
 // ----------------------------------------------------------------------------
 export const BUILDINGS = [
-  // --- resource ---
-  { id: "quarry", name: "Limestone Quarry", cat: "resource", scale: 1.15, unlock: 0,
+  // --- resource producers ---
+  { id: "quarry", name: "Limestone Quarry", cat: "resource", zone: "quarry", scale: 1.15, unlock: 0,
     desc: "Hews pale limestone — the body of every pyramid.",
     cost: { limestone: 15, wood: 5 }, effect: { produce: { limestone: 1.0 } } },
-  { id: "farm", name: "Nile Farm", cat: "resource", scale: 1.15, unlock: 0,
-    desc: "Grain to keep the workforce fed.",
+  { id: "farm", name: "Nile Farm", cat: "resource", zone: "farm", scale: 1.15, unlock: 0,
+    desc: "Riverside fields of grain.",
     cost: { limestone: 18, wood: 8 }, effect: { produce: { food: 0.85 } } },
-  { id: "well", name: "Water Well", cat: "resource", scale: 1.15, unlock: 0,
-    desc: "Draws water for thirsty crews.",
+  { id: "well", name: "Water Well", cat: "resource", zone: "well", scale: 1.15, unlock: 0,
+    desc: "Draws cool water for the camps.",
     cost: { limestone: 18, wood: 8 }, effect: { produce: { water: 0.85 } } },
-  { id: "lumber_camp", name: "Lumber Camp", cat: "resource", scale: 1.16, unlock: 0,
-    desc: "Acacia and imported cedar for sleds and machines.",
+  { id: "lumber_camp", name: "Lumber Camp", cat: "resource", zone: "lumber", scale: 1.16, unlock: 0,
+    desc: "Acacia and cedar for sleds and machines.",
     cost: { limestone: 30, food: 12 }, effect: { produce: { wood: 0.6 } } },
-  { id: "granite_mine", name: "Granite Quarry", cat: "resource", scale: 1.17, unlock: 120,
-    desc: "Hard granite for chambers, casing and the capstone.",
+  { id: "granite_mine", name: "Granite Quarry", cat: "resource", zone: "granite", scale: 1.17, unlock: 100,
+    desc: "Hard granite for casing and capstones.",
     cost: { limestone: 90, wood: 35, copper: 5 }, effect: { produce: { granite: 0.32 } } },
-  { id: "copper_mine", name: "Copper Mine", cat: "resource", scale: 1.17, unlock: 120,
-    desc: "Copper for chisels, saws and gleaming tools.",
+  { id: "copper_mine", name: "Copper Mine", cat: "resource", zone: "copper", scale: 1.17, unlock: 100,
+    desc: "Copper for chisels and saws.",
     cost: { limestone: 80, wood: 35 }, effect: { produce: { copper: 0.27 } } },
 
-  // --- transport machines (blocks/sec capacity) ---
-  { id: "wooden_rollers", name: "Wooden Rollers", cat: "transport", scale: 1.15, unlock: 0,
-    desc: "Logs under the sled. Humble, but it begins.",
-    cost: { wood: 20, limestone: 10 }, effect: { transport: 0.5 } },
-  { id: "rope_winch", name: "Rope Winch", cat: "transport", scale: 1.16, unlock: 50,
-    desc: "Twisted palm rope multiplies a crew's pull.",
-    cost: { wood: 60, copper: 8 }, effect: { transport: 1.2 } },
-  { id: "sled", name: "Greased Sled", cat: "transport", scale: 1.17, unlock: 180,
-    desc: "Water-slick runners glide blocks across sand.",
-    cost: { wood: 150, copper: 20 }, effect: { transport: 3 } },
-  { id: "crane", name: "Counterweight Crane", cat: "transport", scale: 1.18, unlock: 800,
-    desc: "Shaduf-style counterweights lift blocks skyward.",
-    cost: { wood: 500, copper: 120, granite: 30 }, effect: { transport: 9 } },
-  { id: "lubrication", name: "Water Lubrication", cat: "transport", scale: 1.19, unlock: 2500,
-    desc: "Channels of water cut sled friction to nothing.",
-    cost: { copper: 400, granite: 120, water: 2500 }, effect: { transport: 22 } },
-  { id: "massive_ramp", name: "Spiraling Mega-Ramp", cat: "transport", scale: 1.2, unlock: 6000,
-    desc: "A ramp wrapping the whole pyramid.",
-    cost: { limestone: 20000, wood: 5000, granite: 500 }, effect: { transport: 55 } },
-  { id: "elevator", name: "Giant Stone Elevator", cat: "transport", scale: 1.21, unlock: 16000,
-    desc: "Impossible machinery hauls blocks straight up.",
-    cost: { copper: 8000, granite: 4000 }, effect: { transport: 140 } },
-  { id: "marvel", name: "Experimental Marvel", cat: "transport", scale: 1.23, unlock: 45000,
-    desc: "Egyptian engineering that should not work — yet does.",
-    cost: { granite: 30000, copper: 30000 }, effect: { transport: 380 } },
+  // --- machines: make building faster (+build speed) ---
+  { id: "wooden_rollers", name: "Wooden Rollers", cat: "machine", zone: "ramp", scale: 1.15, unlock: 0,
+    desc: "Logs under the sled. +4% build speed each.",
+    cost: { wood: 20, limestone: 10 }, effect: { buildSpeed: 0.04 } },
+  { id: "rope_winch", name: "Rope Winch", cat: "machine", zone: "ramp", scale: 1.16, unlock: 40,
+    desc: "Palm-rope pulleys. +9% build speed each.",
+    cost: { wood: 60, copper: 8 }, effect: { buildSpeed: 0.09 } },
+  { id: "sled", name: "Greased Sled", cat: "machine", zone: "ramp", scale: 1.17, unlock: 150,
+    desc: "Water-slick runners. +20% build speed each.",
+    cost: { wood: 150, copper: 20 }, effect: { buildSpeed: 0.2 } },
+  { id: "crane", name: "Counterweight Crane", cat: "machine", zone: "ramp", scale: 1.18, unlock: 700,
+    desc: "Shaduf counterweights lift blocks high. +50% each.",
+    cost: { wood: 500, copper: 120, granite: 30 }, effect: { buildSpeed: 0.5 } },
+  { id: "lubrication", name: "Water Lubrication", cat: "machine", zone: "ramp", scale: 1.19, unlock: 2500,
+    desc: "Frictionless channels. +120% build speed each.",
+    cost: { copper: 400, granite: 120, water: 2500 }, effect: { buildSpeed: 1.2 } },
+  { id: "massive_ramp", name: "Spiraling Mega-Ramp", cat: "machine", zone: "ramp", scale: 1.2, unlock: 6000,
+    desc: "A ramp wrapping the whole pyramid. +260% each.",
+    cost: { limestone: 20000, wood: 5000, granite: 500 }, effect: { buildSpeed: 2.6 } },
+  { id: "elevator", name: "Giant Stone Elevator", cat: "machine", zone: "ramp", scale: 1.21, unlock: 16000,
+    desc: "Impossible machinery hauls blocks straight up. +650% each.",
+    cost: { copper: 8000, granite: 4000 }, effect: { buildSpeed: 6.5 } },
+  { id: "marvel", name: "Experimental Marvel", cat: "machine", zone: "ramp", scale: 1.23, unlock: 45000,
+    desc: "Engineering that should not work — yet does. +1700% each.",
+    cost: { granite: 30000, copper: 30000 }, effect: { buildSpeed: 17 } },
 
   // --- city / support ---
-  { id: "village", name: "Worker Village", cat: "city", scale: 1.16, unlock: 0,
-    desc: "Mud-brick homes. Houses more crew and lifts morale.",
-    cost: { limestone: 50, wood: 30, food: 20 }, effect: { workerCap: 8, morale: 0.6 } },
-  { id: "granary", name: "Granary", cat: "city", scale: 1.16, unlock: 40,
-    desc: "Stores food and water; a little surplus grain.",
-    cost: { limestone: 60, wood: 40 }, effect: { cap: { food: 600, water: 400 }, produce: { food: 0.3 } } },
-  { id: "storage_yard", name: "Storage Yard", cat: "city", scale: 1.17, unlock: 150,
-    desc: "Raises how much stone, wood and metal you can stockpile.",
-    cost: { wood: 120, limestone: 90 }, effect: { cap: { limestone: 2500, granite: 600, wood: 900, copper: 500 } } },
-  { id: "docks", name: "River Docks", cat: "city", scale: 1.18, unlock: 300,
-    desc: "Barges bring water and ferry blocks downriver.",
-    cost: { wood: 220, copper: 30 }, effect: { produce: { water: 1.5 }, transport: 2 } },
-  { id: "market", name: "Grand Market", cat: "city", scale: 1.22, unlock: 400,
-    desc: "Trade lifts the yield of every industry (+3% each).",
-    cost: { limestone: 220, wood: 130, copper: 22 }, effect: { globalProd: 0.03 } },
-  { id: "temple", name: "Temple", cat: "city", scale: 1.2, unlock: 600,
-    desc: "Appeases the gods — fewer, milder disasters; more morale.",
-    cost: { limestone: 420, granite: 45 }, effect: { disasterMult: 0.9, morale: 1.2 } },
+  { id: "village", name: "Worker Village", cat: "city", zone: "village", scale: 1.16, unlock: 0,
+    desc: "Mud-brick homes and camps. +3% build speed each.",
+    cost: { limestone: 50, wood: 30, food: 20 }, effect: { buildSpeed: 0.03 } },
+  { id: "granary", name: "Granary", cat: "city", zone: "village", scale: 1.16, unlock: 30,
+    desc: "Stores food & water and yields a little grain.",
+    cost: { limestone: 60, wood: 40 }, effect: { cap: { food: 800, water: 600 }, produce: { food: 0.3 } } },
+  { id: "storage_yard", name: "Storage Yard", cat: "city", zone: "storage", scale: 1.17, unlock: 120,
+    desc: "Raises how much you can stockpile.",
+    cost: { wood: 120, limestone: 90 }, effect: { cap: { limestone: 3000, granite: 800, wood: 1200, copper: 700 } } },
+  { id: "docks", name: "River Docks", cat: "city", zone: "nile", scale: 1.18, unlock: 250,
+    desc: "Barges on the Nile bring water and trade.",
+    cost: { wood: 220, copper: 30 }, effect: { produce: { water: 1.5 }, buildSpeed: 0.02 } },
+  { id: "market", name: "Grand Market", cat: "city", zone: "market", scale: 1.22, unlock: 350,
+    desc: "Trade lifts every industry (+3% production each).",
+    cost: { limestone: 220, wood: 130, copper: 22 }, effect: { prodAll: 0.03 } },
+  { id: "temple", name: "Temple", cat: "city", zone: "temple", scale: 1.2, unlock: 500,
+    desc: "Honors the gods. +5% build speed each.",
+    cost: { limestone: 420, granite: 45 }, effect: { buildSpeed: 0.05 } },
 ];
 
 // ----------------------------------------------------------------------------
-// Workers. Hired against the housing cap; consume food+water each second.
-// effect keys: placement, supply (limestone/s), transportPct, workerPct,
-// disasterMult, morale, speedPct.
+// Workers. effect keys: builders (haulers added), buildSpeed, prodAll.
 // ----------------------------------------------------------------------------
 export const WORKERS = [
   { id: "laborer", name: "Laborer", scale: 1.15, unlock: 0,
-    desc: "Hauls and sets blocks. The backbone of the build.",
-    cost: { food: 10, limestone: 5 }, upkeep: { food: 0.02, water: 0.02 },
-    effect: { placement: 0.6 } },
-  { id: "cutter", name: "Stone Cutter", scale: 1.16, unlock: 80,
-    desc: "Dresses raw stone faster — more limestone supply.",
-    cost: { limestone: 40, copper: 3 }, upkeep: { food: 0.03, water: 0.02 },
-    effect: { supply: 0.9 } },
-  { id: "engineer", name: "Engineer", scale: 1.18, unlock: 300,
-    desc: "Tunes every machine: +6% transport capacity each.",
-    cost: { wood: 60, copper: 15 }, upkeep: { food: 0.03, water: 0.03 },
-    effect: { transportPct: 0.06 } },
-  { id: "architect", name: "Architect", scale: 1.2, unlock: 1500,
-    desc: "Designs advanced sections — strong placement and +2% all crew.",
-    cost: { limestone: 500, granite: 30, copper: 40 }, upkeep: { food: 0.05, water: 0.04 },
-    effect: { placement: 4, workerPct: 0.02 } },
-  { id: "priest", name: "Priest", scale: 1.19, unlock: 600,
-    desc: "Rites that calm the gods: −7% disaster chance each, +morale.",
-    cost: { food: 200, granite: 20 }, upkeep: { food: 0.04, water: 0.03 },
-    effect: { disasterMult: 0.93, morale: 1.5 } },
-  { id: "overseer", name: "Overseer", scale: 1.22, unlock: 2500,
-    desc: "Drives the gangs: +5% worker speed each, fewer accidents.",
-    cost: { limestone: 800, copper: 80 }, upkeep: { food: 0.05, water: 0.05 },
-    effect: { speedPct: 0.05, disasterMult: 0.985 } },
+    desc: "Hauls blocks up the ramp. More laborers = more workers building.",
+    cost: { food: 10, limestone: 5 }, effect: { builders: 1 } },
+  { id: "mason", name: "Stone Mason", scale: 1.16, unlock: 60,
+    desc: "Dresses stone fast. +5% build speed each.",
+    cost: { limestone: 40, copper: 3 }, effect: { buildSpeed: 0.05 } },
+  { id: "engineer", name: "Engineer", scale: 1.18, unlock: 250,
+    desc: "Tunes the machines. +8% build speed each.",
+    cost: { wood: 60, copper: 15 }, effect: { buildSpeed: 0.08 } },
+  { id: "priest", name: "Priest", scale: 1.19, unlock: 500,
+    desc: "Blesses the works. +4% all resource production each.",
+    cost: { food: 200, granite: 20 }, effect: { prodAll: 0.04 } },
+  { id: "architect", name: "Architect", scale: 1.2, unlock: 1200,
+    desc: "Master builder: +2 builders and +5% build speed each.",
+    cost: { limestone: 500, granite: 30, copper: 40 }, effect: { builders: 2, buildSpeed: 0.05 } },
+  { id: "overseer", name: "Overseer", scale: 1.22, unlock: 2200,
+    desc: "Drives the gangs. +7% build speed each.",
+    cost: { limestone: 800, copper: 80 }, effect: { buildSpeed: 0.07 } },
 ];
 
 // ----------------------------------------------------------------------------
 // Prestige blessings (Pharaoh Legacy). cost = base * 1.6^level.
+// kind consumed by sim: build | masons | fertile | prodAll | builders | whip | treasury
 // ----------------------------------------------------------------------------
 export const BLESSINGS = [
-  { id: "strong_backs", name: "Strong Backs", base: 3, desc: "+20% block placement per level.", per: 0.20, kind: "placement" },
+  { id: "strong_backs", name: "Strong Backs", base: 3, desc: "+25% build speed per level.", per: 0.25, kind: "build" },
   { id: "master_masons", name: "Master Masons", base: 4, desc: "−7% limestone per block per level.", per: 0.07, kind: "masons" },
-  { id: "divine_engineering", name: "Divine Engineering", base: 4, desc: "+20% transport capacity per level.", per: 0.20, kind: "transport" },
-  { id: "fertile_nile", name: "Fertile Nile", base: 3, desc: "+25% food & water output per level.", per: 0.25, kind: "fertile" },
-  { id: "swift_labor", name: "Swift Labor", base: 5, desc: "+12% all worker speed per level.", per: 0.12, kind: "swift" },
-  { id: "royal_treasury", name: "Royal Treasury", base: 5, desc: "+1 of each starter building & +40% caps per level.", per: 0.40, kind: "treasury" },
-  { id: "eternal_favor", name: "Eternal Favor", base: 6, desc: "−12% disaster chance per level.", per: 0.12, kind: "favor" },
-  { id: "sun_blessing", name: "Blessing of Ra", base: 4, desc: "+60% tap power per level.", per: 0.60, kind: "click" },
+  { id: "swift_labor", name: "Swift Labor", base: 5, desc: "+15% build speed per level.", per: 0.15, kind: "build" },
+  { id: "bountiful", name: "Bountiful Lands", base: 4, desc: "+20% all resource production per level.", per: 0.2, kind: "prodAll" },
+  { id: "fertile_nile", name: "Fertile Nile", base: 3, desc: "+25% food & water per level.", per: 0.25, kind: "fertile" },
+  { id: "great_gangs", name: "Great Gangs", base: 6, desc: "+2 free builders per level.", per: 2, kind: "builders" },
+  { id: "royal_treasury", name: "Royal Treasury", base: 5, desc: "+1 starter building & +40% caps per level.", per: 0.4, kind: "treasury" },
+  { id: "crack_of_ra", name: "Crack of Ra", base: 4, desc: "+60% whip power per level.", per: 0.6, kind: "whip" },
 ];
 
 // ----------------------------------------------------------------------------
@@ -170,67 +161,29 @@ export function wonderFor(k) {
   };
 }
 
-// Pyramid geometry for wonder tier k.
 export function wonderGeom(k) {
-  const base = 14 + 4 * k;            // bottom layer side (in cubes)
-  const layers = Math.floor(base / 2); // sides base, base-2, ... , 2
-  const blocksPerCube = Math.round(Math.pow(6, k)); // gameplay blocks per visual cube
+  const base = 14 + 4 * k;
+  const layers = Math.floor(base / 2);
+  const blocksPerCube = Math.round(Math.pow(6, k));
   return { base, layers, blocksPerCube };
 }
-
-export function cubesInLayer(k, j) {
-  const side = (14 + 4 * k) - 2 * j;
-  return side > 0 ? side * side : 0;
-}
-
-export function blocksForLayer(k, j) {
-  return cubesInLayer(k, j) * wonderGeom(k).blocksPerCube;
-}
-
+export function cubesInLayer(k, j) { const side = (14 + 4 * k) - 2 * j; return side > 0 ? side * side : 0; }
+export function blocksForLayer(k, j) { return cubesInLayer(k, j) * wonderGeom(k).blocksPerCube; }
 export function wonderTotalBlocks(k) {
   const g = wonderGeom(k); let t = 0;
   for (let j = 0; j < g.layers; j++) t += blocksForLayer(k, j);
   return t;
 }
-
 export const FIRST_WONDER_TOTAL = wonderTotalBlocks(0);
 
 // ----------------------------------------------------------------------------
-// Weather. Multipliers applied while active; forecast shows the next one.
+// Weather — light flavour only: a small build/production modifier, no disasters.
 // ----------------------------------------------------------------------------
 export const WEATHER = [
-  { id: "clear", name: "Clear Skies", desc: "Perfect building weather.", weight: 5,
-    min: 80, max: 150, fx: {} },
-  { id: "sandstorm", name: "Sandstorm", desc: "Stinging sand slows the gangs and blots out the sun.", weight: 2,
-    min: 40, max: 80, fx: { placementMult: 0.75 } },
-  { id: "heat", name: "Extreme Heat", desc: "Crews drink double and tire under the blazing sun.", weight: 2,
-    min: 50, max: 90, fx: { placementMult: 0.9, waterUpkeepMult: 1.8 } },
-  { id: "flood", name: "Nile Flood", desc: "Fields drink deep (+farms) but routes are cut (−transport).", weight: 1.6,
-    min: 50, max: 90, fx: { foodWaterProdMult: 1.8, transportMult: 0.82 } },
-  { id: "rain", name: "Rare Rain", desc: "Mud bogs the sleds and threatens the ramps.", weight: 0.7,
-    min: 30, max: 55, fx: { transportMult: 0.7, rampRiskMult: 2 } },
-];
-
-// ----------------------------------------------------------------------------
-// Disasters. random ones roll each second from basePerMin (× mitigation).
-// strike is condition-driven (low morale), not random.
-// ----------------------------------------------------------------------------
-export const DISASTERS = [
-  { id: "ramp_collapse", name: "Ramp Collapse", random: true, basePerMin: 0.1,
-    desc: "A ramp gives way — transport is halted until repaired.",
-    minDur: 12, maxDur: 18 },
-  { id: "tomb_robbers", name: "Tomb Robbers", random: true, basePerMin: 0.09,
-    desc: "Thieves raid the stores and make off with resources.",
-    minDur: 0, maxDur: 0 },
-  { id: "plague", name: "Sacred Plague", random: true, basePerMin: 0.05,
-    desc: "Sickness sweeps the camp — a quarter of the crew falls idle.",
-    minDur: 40, maxDur: 60 },
-  { id: "pharaoh_death", name: "Pharaoh's Passing", random: true, basePerMin: 0.025,
-    desc: "The Pharaoh dies. Production halves until a successor is crowned.",
-    minDur: 30, maxDur: 30 },
-  { id: "strike", name: "Worker Strike", random: false,
-    desc: "Hungry, parched crews down tools. Restore food & water to end it.",
-    minDur: 0, maxDur: 0 },
+  { id: "clear", name: "Clear Skies", desc: "Perfect building weather.", weight: 6, min: 90, max: 160, fx: {} },
+  { id: "sandstorm", name: "Sandstorm", desc: "Blowing sand slows the gangs a little.", weight: 2, min: 45, max: 80, fx: { buildMult: 0.82 } },
+  { id: "heat", name: "Hot Day", desc: "The crews work a touch slower in the heat.", weight: 2, min: 50, max: 90, fx: { buildMult: 0.9 } },
+  { id: "flood", name: "Nile Flood", desc: "The river overflows — fields drink deep (+food & water).", weight: 1.6, min: 55, max: 95, fx: { foodWaterMult: 1.8 } },
 ];
 
 export const OFFLINE_CAP_S = 12 * 3600;

@@ -71,6 +71,10 @@ svg.ic{width:1.15em;height:1.15em;vertical-align:-.18em;flex:0 0 auto}
 .bar .fill.limit{background:linear-gradient(90deg,#e0824a,#f0c050)!important;box-shadow:0 0 8px rgba(230,150,70,.5)}
 .bottleneck{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5}
 .bottleneck b{color:var(--text);font-weight:800}
+.buildrate{font-size:13px;color:var(--text);margin-top:2px}.buildrate b{color:var(--gold);font-size:16px;font-variant-numeric:tabular-nums}
+.buildersline{font-size:12px;color:var(--muted);margin-top:4px}.buildersline b{color:var(--text);font-weight:700}
+.buildersline .hot{color:#ff8a3a;font-weight:800}
+.limited{font-size:11px;color:var(--warn);margin-top:6px;font-weight:700}
 .weather{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:9px;border-top:1px solid var(--line);font-size:12.5px}
 .weather .ic,.weather svg{width:20px;height:20px;color:var(--turq)}
 .weather .wxn{font-weight:700} .weather .wxx{margin-left:auto;font-size:10.5px;color:var(--dim)}

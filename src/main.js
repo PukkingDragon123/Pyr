@@ -1,11 +1,10 @@
 // Bootstrap: fixed-timestep loop, input (pointer/keyboard/gamepad), wiring of
 // sim ↔ render ↔ audio ↔ ui, autosave and background catch-up.
 import { STR } from "../strings.js";
-import { BUILDINGS, WORKERS, BLESSINGS, DISASTERS, AUTOSAVE_MS, wonderFor } from "./data.js";
+import { BUILDINGS, WORKERS, BLESSINGS, AUTOSAVE_MS, wonderFor } from "./data.js";
 import {
-  step, tapPlace, computeStats, buyBuilding, buyWorker, buyBlessing,
-  doPrestige, legacyGain, repairRamp, crownSuccessor, isUnlocked,
-  freshlyUnlocked, simulateOffline, crackWhip,
+  step, computeStats, buyBuilding, buyWorker, buyBlessing,
+  doPrestige, legacyGain, isUnlocked, freshlyUnlocked, simulateOffline, whip,
 } from "./sim.js";
 import { load, save, wipe, exportSave, importSave } from "./save.js";
 import { newGame } from "./state.js";
@@ -14,7 +13,6 @@ import { Audio } from "./audio.js";
 import { UI } from "./ui.js";
 import { fmt } from "./format.js";
 
-const DISASTER_NAME = {}; for (const d of DISASTERS) DISASTER_NAME[d.id] = d.name;
 const STEP = 1000 / 60;
 const DPR_CAP = 1.5;
 
@@ -66,12 +64,7 @@ const app = {
       save(state);
     }
   },
-  repairRamp: () => { if (repairRamp(state)) audio.play("buy"); },
-  crownSuccessor: () => { if (crownSuccessor(state)) audio.play("buy"); },
-  crackWhip: () => {
-    ensureAudio();
-    if (crackWhip(state)) { audio.play("whip"); renderer.whipCrack(true); ui.popup(STR.whipGo, "go"); }
-  },
+  whip: (x, y) => { ensureAudio(); whip(state); renderer.whipAt(x, y); ui.popup(STR.whipGo, "go"); },
   toggleMute: (m) => { state.settings.muted = m; audio.setMuted(m); },
   toggleMusic: (on) => { state.settings.music = on; audio.setMusic(on); },
   saveNow: () => save(state),
@@ -87,19 +80,6 @@ const app = {
     renderer.pan = { x: 0, y: 0 }; renderer.zoom = 1; renderer.cacheKey = "";
     lastStats = computeStats(state);
     ui.toast(STR.dynastyToast(STR.dynasty(1)), "good");
-  },
-  tap: (x, y) => {
-    ensureAudio();
-    const built = tapPlace(state);
-    if (built > 0) {
-      renderer.addBurst(x, y, "+" + fmt(built), "#ffe6a3");
-      renderer.spawnDust(x, y + 6, 4, { sp: 26, up: 10, r: 3, life: 0.45 });
-      renderer.kick(1.5);
-      audio.play(state.stats.taps % 3 === 0 ? "place" : "tap");
-    } else {
-      audio.play("error");
-      ui.toast(STR.needLimestone, "warn");
-    }
   },
 };
 
@@ -143,7 +123,7 @@ function endPointer(e) {
   pointers.delete(e.pointerId);
   if (!had) return;
   if (pointers.size === 0 && downPos && moved < 8 && performance.now() - downPos.t < 600) {
-    app.tap(downPos.x, downPos.y);
+    app.whip(downPos.x, downPos.y);
   }
   downPos = pointers.size ? downPos : null;
 }
@@ -158,7 +138,7 @@ canvas.addEventListener("wheel", (e) => {
 addEventListener("keydown", (e) => {
   if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
   if (e.code === "Space" || e.code === "Enter") {
-    e.preventDefault(); app.tap(innerWidth / 2, innerHeight * 0.5);
+    e.preventDefault(); app.whip(innerWidth / 2, innerHeight * 0.55);
   } else if (e.code === "KeyM") { app.toggleMute(!state.settings.muted); }
   else if (e.code === "Equal" || e.code === "NumpadAdd") { renderer.zoom = Math.min(3, renderer.zoom * 1.12); }
   else if (e.code === "Minus" || e.code === "NumpadSubtract") { renderer.zoom = Math.max(0.4, renderer.zoom * 0.9); }
@@ -172,7 +152,7 @@ function pollPad(dt) {
   for (const gp of pads) {
     if (!gp) continue;
     if (gp.buttons[0] && gp.buttons[0].pressed && padTapCd <= 0) {
-      ensureAudio(); app.tap(innerWidth / 2, innerHeight * 0.5); padTapCd = 0.12;
+      ensureAudio(); app.whip(innerWidth / 2, innerHeight * 0.55); padTapCd = 0.3;
     }
   }
 }
@@ -191,10 +171,7 @@ function drainFx() {
         ui.showCeremony(wonderFor(state.wonderIndex).name, legacyGain(state));
       }
     } else if (f.type === "whip") {
-      renderer.whipCrack(true);
-    } else if (f.type === "disaster") {
-      audio.play("disaster"); renderer.kick(5);
-      if (DISASTER_NAME[f.id]) ui.toast(DISASTER_NAME[f.id], "bad");
+      audio.play("whip");
     }
   }
   fx.length = 0;

@@ -6,7 +6,7 @@ import {
   WEATHER, wonderFor, wonderGeom, blocksForLayer,
 } from "./data.js";
 import { costFor, canAfford, resolveQty } from "./state.js";
-import { isUnlocked, blessingCost, hasEvent } from "./sim.js";
+import { isUnlocked, blessingCost } from "./sim.js";
 import { icon } from "./icons.js";
 import { fmt, fmtInt, fmtTime } from "./format.js";
 
@@ -17,7 +17,7 @@ function el(tag, cls, html) {
   return e;
 }
 
-const CATS = ["resource", "crew", "transport", "city", "blessing"];
+const CATS = ["resource", "crew", "machine", "city", "blessing"];
 
 export class UI {
   constructor(app) {
@@ -53,28 +53,19 @@ export class UI {
     top.append(this.brand, this.resBar, this.legacyChip, helpBtn, gear);
     r.appendChild(top);
 
-    // ---- status (goal + chain + weather + morale) ----
+    // ---- status (goal + build + weather) ----
     const status = el("div", "status");
     this.goalLine = el("div", "goal");
     this.progWrap = el("div", "bar"); this.progFill = el("div", "fill gold");
     this.progWrap.appendChild(this.progFill);
     this.progText = el("div", "progtext");
 
-    const chain = el("div", "chain");
-    chain.appendChild(el("div", "chain-h", `${icon("transport")}<span>${STR.chainTitle}</span>`));
-    this.chainRows = {};
-    for (const key of ["supply", "transport", "placement"]) {
-      const row = el("div", "chain-row");
-      const lab = el("span", "lab", STR.chain[key]);
-      const bar = el("div", "bar mini"); const fill = el("div", "fill");
-      bar.appendChild(fill);
-      const val = el("span", "cval");
-      row.append(lab, bar, val);
-      this.chainRows[key] = { row, fill, val };
-      chain.appendChild(row);
-    }
-    this.bottleneck = el("div", "bottleneck");
-    chain.appendChild(this.bottleneck);
+    const build = el("div", "chain");
+    build.appendChild(el("div", "chain-h", `${icon("transport")}<span>${STR.buildTitle}</span>`));
+    this.buildRateEl = el("div", "buildrate");
+    this.buildersEl = el("div", "buildersline");
+    this.limitedEl = el("div", "limited hidden");
+    build.append(this.buildRateEl, this.buildersEl, this.limitedEl);
 
     const wx = el("div", "weather");
     this.wxIc = el("span", "ic", icon("weather"));
@@ -82,16 +73,10 @@ export class UI {
     this.wxNext = el("span", "wxx");
     wx.append(this.wxIc, this.wxName, this.wxNext);
 
-    const mor = el("div", "morale");
-    mor.appendChild(el("span", "lab", STR.moraleLabel));
-    const mbar = el("div", "bar mini"); this.moraleFill = el("div", "fill");
-    mbar.appendChild(this.moraleFill); mor.appendChild(mbar);
-    this.moraleV = el("span", "cval"); mor.appendChild(this.moraleV);
-
-    status.append(this.goalLine, this.progWrap, this.progText, chain, wx, mor);
+    status.append(this.goalLine, this.progWrap, this.progText, build, wx);
     r.appendChild(status);
 
-    // ---- contextual action banner (disasters / prestige) ----
+    // ---- contextual action banner (prestige) ----
     this.banner = el("div", "banner hidden");
     r.appendChild(this.banner);
 
@@ -100,7 +85,7 @@ export class UI {
     const tabs = el("div", "tabs");
     this.tabBtns = {};
     for (const c of CATS) {
-      const b = el("button", "tab", `<span class="ic">${icon(c === "crew" ? "crew" : c === "blessing" ? "blessing" : c)}</span><span>${STR.tabs[c]}</span>`);
+      const b = el("button", "tab", `<span class="ic">${icon(c === "crew" ? "crew" : c === "blessing" ? "blessing" : c === "machine" ? "transport" : c)}</span><span>${STR.tabs[c]}</span>`);
       b.onclick = () => this._setTab(c);
       this.tabBtns[c] = b; tabs.appendChild(b);
     }
@@ -133,11 +118,6 @@ export class UI {
     this.tip = el("div", "tip", STR.startTip);
     r.appendChild(this.tip);
 
-    // ---- whip button (active speed surge) ----
-    this.whipBtn = el("button", "whipbtn", `<span class="ic">${icon("overseer")}</span><span class="wl">${STR.whip}</span>`);
-    this.whipBtn.onclick = () => this.app.crackWhip();
-    r.appendChild(this.whipBtn);
-
     // ---- center reward popup ----
     this.popupEl = el("div", "popup"); r.appendChild(this.popupEl);
 
@@ -165,7 +145,6 @@ export class UI {
     const steps = STR.tut.steps;
     // auto-advance conditions
     const cond = [
-      () => state.stats.taps >= 4,
       () => (state.buildings.quarry || 0) >= 2,
       () => (state.workers.laborer || 0) >= 4,
       () => state.whip && state.whip.ever,
@@ -183,9 +162,8 @@ export class UI {
   }
   _tutRender(state, step, data) {
     this._clearGlow();
-    if (step === 1) { this._setTab("resource"); this._glow(this.tabBtns.resource); }
-    else if (step === 2) { this._setTab("crew"); this._glow(this.tabBtns.crew); }
-    else if (step === 3) { this._glow(this.whipBtn); }
+    if (step === 0) { this._setTab("resource"); this._glow(this.tabBtns.resource); }
+    else if (step === 1) { this._setTab("crew"); this._glow(this.tabBtns.crew); }
     const last = step >= STR.tut.steps.length - 1;
     this.tutEl.innerHTML = `<div class="tut-step">${step + 1}/${STR.tut.steps.length}</div>
       <h3>${data.title}</h3><p>${data.body}</p>`;
@@ -198,17 +176,6 @@ export class UI {
   }
   _glow(elm) { if (elm) elm.classList.add("tut-glow"); this._glowed = elm; }
   _clearGlow() { if (this._glowed) this._glowed.classList.remove("tut-glow"); this._glowed = null; }
-
-  _updateWhip(state) {
-    const w = state.whip || { boostT: 0, cd: 0 };
-    const active = w.boostT > 0, ready = w.cd <= 0;
-    this.whipBtn.classList.toggle("active", active);
-    this.whipBtn.classList.toggle("cooling", !ready && !active);
-    const lbl = this.whipBtn.querySelector(".wl");
-    if (active) lbl.textContent = STR.whipGo;
-    else if (!ready) lbl.textContent = STR.whipCd(Math.ceil(w.cd));
-    else lbl.textContent = STR.whip;
-  }
 
   _buildModals() {
     this.modalWrap = el("div", "modalwrap hidden");
@@ -313,7 +280,7 @@ export class UI {
 
   _defsFor(tab) {
     if (tab === "resource") return BUILDINGS.filter((b) => b.cat === "resource").map((d) => ({ d, kind: "b" }));
-    if (tab === "transport") return BUILDINGS.filter((b) => b.cat === "transport").map((d) => ({ d, kind: "b" }));
+    if (tab === "machine") return BUILDINGS.filter((b) => b.cat === "machine").map((d) => ({ d, kind: "b" }));
     if (tab === "city") return BUILDINGS.filter((b) => b.cat === "city").map((d) => ({ d, kind: "b" }));
     if (tab === "crew") return WORKERS.map((d) => ({ d, kind: "w" }));
     if (tab === "blessing") return BLESSINGS.map((d) => ({ d, kind: "g" }));
@@ -381,10 +348,6 @@ export class UI {
       let chips = "";
       let afford = canAfford(state.res, c);
       for (const rk in c) chips += `<span class="costchip ${state.res[rk] >= c[rk] - 1e-6 ? "" : "no"}"><span class="ic">${icon(rk)}</span>${fmt(c[rk])}</span>`;
-      if (kind === "w") {
-        const room = stats.workerCap - stats.workersUsed;
-        if (room <= 0) { afford = false; chips += `<span class="costchip no">${STR.housing} full</span>`; }
-      }
       cost.innerHTML = chips;
       item.classList.toggle("disabled", !afford);
     }
@@ -398,8 +361,6 @@ export class UI {
       const ref = this.resChips[k];
       ref.v.textContent = fmt(state.res[k]);
       let net = stats.prod[k] || 0;
-      if (k === "food") net -= stats.upkeep.food;
-      if (k === "water") net -= stats.upkeep.water;
       if (k === "limestone") net -= (state._lastFlow || 0) * stats.lpb;
       ref.net.textContent = (net >= 0 ? "+" : "") + fmt(net) + STR.res.perSec;
       ref.net.className = "net " + (net >= -1e-6 ? "up" : "down");
@@ -420,46 +381,25 @@ export class UI {
       this.progText.textContent = STR.layerProgress(fmt(state.blocksInLayer), fmt(need));
     }
 
-    // chain
-    const maxR = Math.max(stats.supplySustain, stats.transport, stats.placement, 0.001);
-    const cv = { supply: stats.supplySustain, transport: stats.transport, placement: stats.placement };
-    for (const key in this.chainRows) {
-      const row = this.chainRows[key];
-      row.fill.style.width = (100 * Math.max(0, cv[key]) / maxR).toFixed(0) + "%";
-      row.val.textContent = fmt(cv[key]) + STR.res.perSec;
-      row.fill.classList.toggle("limit", stats.bottleneck === key);
-      row.row.classList.toggle("limit", stats.bottleneck === key);
-    }
-    this.bottleneck.innerHTML = `${STR.effective} <b>${fmt(state._lastFlow || 0)}${STR.res.perSec}</b> · ${STR.bottleneckPrefix}<b>${STR.bottleneck[stats.bottleneck] || ""}</b>`;
+    // build readout
+    this.buildRateEl.innerHTML = `${STR.buildRate} <b>${fmt(state._lastFlow || 0)}</b> ${STR.blocksPerSec}`;
+    this.buildersEl.innerHTML = `${STR.builders} <b>${fmt(stats.builders || 0)}</b>${stats.whipMult > 1 ? ` · <span class="hot">${STR.whipGo}</span>` : ""}`;
+    this.limitedEl.classList.toggle("hidden", !state._limited);
+    this.limitedEl.textContent = STR.shortLimestone;
 
-    // weather
+    // weather (light)
     const wx = WEATHER.find((w) => w.id === state.weather.id) || WEATHER[0];
     const nx = WEATHER.find((w) => w.id === state.weather.nextId);
     this.wxName.textContent = wx.name + " · " + fmtTime(state.weather.timeLeft);
     this.wxNext.textContent = nx ? STR.weatherNext + nx.name : "";
-    this.wxIc.className = "ic wx-" + wx.id;
 
-    // morale
-    const mp = Math.max(0, Math.min(120, state.morale));
-    this.moraleFill.style.width = (mp / 120 * 100).toFixed(0) + "%";
-    this.moraleFill.style.background = mp < 25 ? "#e0564a" : mp < 60 ? "#e0a64a" : "#67c98a";
-    this.moraleV.textContent = Math.round(state.morale) + (hasEvent(state, "strike") ? " ⚠" : "");
-
-    // banner (disasters / prestige)
     this._banner(state, stats);
-
-    // list
     this._rebuildList(state, stats);
     this._refreshList(state, stats);
-
-    // log
     this._log(state);
-
-    // tip
-    this._updateWhip(state);
     this._tutUpdate(state);
     const tutActive = !state.tutorial.done;
-    this.tip.classList.toggle("hidden", tutActive || state.stats.taps > 2 || state.stats.totalBlocksAllTime > 10);
+    this.tip.classList.toggle("hidden", tutActive || state.stats.totalBlocksAllTime > 30);
   }
 
   _banner(state, stats) {
@@ -472,30 +412,6 @@ export class UI {
       let btn = el("button", "btn primary", STR.prestigeBtn);
       btn.onclick = () => this.app.prestige();
       this.banner.appendChild(btn);
-      this.banner.classList.remove("hidden");
-      return;
-    }
-    if (hasEvent(state, "ramp_collapse")) {
-      this.banner.className = "banner danger";
-      this.banner.innerHTML = `<span>${STR.banner.ramp}</span>`;
-      const b = el("button", "btn", STR.repairBtn + ` (${fmt(80 + 20 * state.wonderIndex)} ${RES_META.wood.name})`);
-      b.onclick = () => this.app.repairRamp();
-      this.banner.appendChild(b);
-      this.banner.classList.remove("hidden");
-      return;
-    }
-    if (hasEvent(state, "pharaoh_death")) {
-      this.banner.className = "banner danger";
-      this.banner.innerHTML = `<span>${STR.banner.pharaoh}</span>`;
-      const b = el("button", "btn", STR.crownBtn);
-      b.onclick = () => this.app.crownSuccessor();
-      this.banner.appendChild(b);
-      this.banner.classList.remove("hidden");
-      return;
-    }
-    if (hasEvent(state, "strike")) {
-      this.banner.className = "banner danger";
-      this.banner.innerHTML = `<span>${STR.banner.strike}</span>`;
       this.banner.classList.remove("hidden");
       return;
     }

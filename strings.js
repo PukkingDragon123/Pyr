@@ -4,12 +4,12 @@ export const STR = {
   title: "Build the Pyramid",
   tagline: "An idle Egyptian megaproject",
 
-  tabs: { resource: "Quarries", crew: "Crew", transport: "Machines", city: "City", blessing: "Legacy" },
+  tabs: { resource: "Quarries", crew: "Crew", machine: "Machines", city: "City", blessing: "Legacy" },
   tabHint: {
-    resource: "Mines, quarries, farms & wells that feed the build.",
-    crew: "Hire the workforce. Crews eat food and drink water.",
-    transport: "Move blocks faster — the chain's usual bottleneck.",
-    city: "Support city: housing, storage, morale & safety.",
+    resource: "Quarries, mines, farms & wells — they produce your resources.",
+    crew: "Hire workers. More laborers = more builders hauling stone.",
+    machine: "Sleds, cranes & ramps — they make building faster.",
+    city: "Village, market, temple, storage & docks along the Nile.",
     blessing: "Permanent Pharaoh's blessings, bought with Legacy.",
   },
 
@@ -18,11 +18,13 @@ export const STR = {
   legacy: "Legacy",
   legacyShort: "Legacy",
 
-  chainTitle: "Construction Chain",
-  chain: { supply: "Supply", transport: "Transport", placement: "Placement" },
-  bottleneckPrefix: "Limited by ",
-  bottleneck: { supply: "limestone supply", transport: "transport", placement: "placement", balanced: "nothing — balanced" },
-  effective: "Building",
+  buildTitle: "Construction",
+  buildRate: "Building",
+  blocksPerSec: "blocks/s",
+  builders: "Builders",
+  shortLimestone: "⚠ Short on limestone — build more quarries.",
+
+  goalLayer: (wonder, n, total) => `${wonder} — Layer ${n} of ${total}`,
 
   goalLayer: (wonder, n, total) => `${wonder} — Layer ${n} of ${total}`,
   layerProgress: (a, b) => `${a} / ${b} blocks this layer`,
@@ -70,19 +72,17 @@ export const STR = {
 
   helpTitle: "How to play",
   helpBody: [
-    "Tap the pyramid to lay stone by hand — every block is placed for real.",
-    "Build quarries, farms and wells for the six resources; hire crews to haul and set blocks.",
-    "Construction runs at the slowest of Supply, Transport and Placement — fix the bottleneck to speed up.",
-    "Crews eat food and drink water. Starve them and morale collapses into a strike.",
-    "Weather and disasters interrupt the work; priests, temples and overseers keep them at bay.",
+    "Build quarries and mines — they produce the resources you spend.",
+    "Hire laborers: each one is a worker who hauls stone up the ramp and sets it. Buy machines to make them faster.",
+    "Click a worker to crack the whip — everyone sprints and builds faster for a few seconds.",
+    "Limestone is the building material. If you run short, build more quarries.",
     "Finish every layer to raise the golden capstone, then found a New Dynasty to keep your Legacy and build a greater wonder.",
   ],
 
   newDynasty: "New Dynasty",
   dynasty: (n) => `Dynasty ${n}`,
-  startTip: "Tap the pyramid below to lay your first stone.",
+  startTip: "Buy a Quarry, hire a Laborer — then watch your workers build.",
   unlocked: (n) => `Unlocked: ${n}`,
-  needLimestone: "Not enough limestone to lay a stone.",
   dynastyToast: (n) => `A new dynasty begins — ${n}`,
 
   whip: "Crack the Whip!",
@@ -95,11 +95,10 @@ export const STR = {
     next: "Next",
     done: "Let's build!",
     steps: [
-      { title: "Welcome, Pharaoh", body: "Tap the rising pyramid to lay stones with your own hand." },
-      { title: "Dig limestone", body: "Open Quarries and build a Limestone Quarry — stone feeds the whole build." },
-      { title: "Hire a crew", body: "In Crew, hire a Laborer. Your workers will haul and place blocks on their own." },
-      { title: "Crack the whip", body: "Tap the whip button to make every worker race — a quick speed surge!" },
-      { title: "Raise a wonder", body: "Fill every layer to set the golden capstone, then begin a New Dynasty. Have fun!" },
+      { title: "Dig limestone", body: "Open Quarries and build a couple of Limestone Quarries — they produce the stone your pyramid is made of." },
+      { title: "Hire workers", body: "In Crew, hire Laborers. Each one walks up the ramp, carries a block and sets it — no hand-placing needed." },
+      { title: "Crack the whip", body: "Tap a worker out on the site to whip them — everyone sprints and builds faster for a few seconds!" },
+      { title: "Raise a wonder", body: "Fill every layer to set the golden capstone, then begin a New Dynasty for a greater pyramid. Have fun!" },
     ],
   },
 };
