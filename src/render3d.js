@@ -7,8 +7,8 @@ import { wonderFor, wonderGeom, BUILDINGS, genNodes, buildableTiles, TILE, PLACE
 import { layerCells } from "./iso.js";
 
 const BUILD_BY_ID = {}; for (const b of BUILDINGS) BUILD_BY_ID[b.id] = b;
-const RES_OF = { quarry: "limestone", lumber_camp: "wood", farm: "food", well: "water", granite_mine: "granite", copper_mine: "copper" };
-const ID_OF_RES = { limestone: "quarry", wood: "lumber_camp", food: "farm", water: "well", granite: "granite_mine", copper: "copper_mine" };
+const RES_OF = { quarry: "limestone", sand_pit: "sand", lumber_camp: "wood", farm: "food", well: "water", granite_mine: "granite", copper_mine: "copper" };
+const ID_OF_RES = { limestone: "quarry", sand: "sand_pit", wood: "lumber_camp", food: "farm", water: "well", granite: "granite_mine", copper: "copper_mine" };
 
 export const DAY_LEN = 240;
 const TAU = Math.PI * 2;
@@ -80,8 +80,13 @@ export class Renderer {
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ map: this._tileTex(), color: 0xffffff, roughness: 1 }));
     ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
     // Nile river (flat water on one side)
-    const nile = new THREE.Mesh(new THREE.PlaneGeometry(220, 26), new THREE.MeshStandardMaterial({ color: 0x3aa6dd, roughness: 0.18, metalness: 0.2 }));
-    nile.rotation.x = -Math.PI / 2; nile.position.set(0, 0.05, -34); scene.add(nile); this.nile = nile;
+    // Nile — sandy bank + deep water + a lighter shallow band along the shore
+    const bank = new THREE.Mesh(new THREE.PlaneGeometry(260, 44), new THREE.MeshStandardMaterial({ color: 0xceac70, roughness: 1 }));
+    bank.rotation.x = -Math.PI / 2; bank.position.set(0, 0.02, -35); bank.receiveShadow = true; scene.add(bank);
+    const deep = new THREE.Mesh(new THREE.PlaneGeometry(244, 24), new THREE.MeshStandardMaterial({ color: 0x2f86c2, roughness: 0.14, metalness: 0.28 }));
+    deep.rotation.x = -Math.PI / 2; deep.position.set(0, 0.06, -35); scene.add(deep); this.nile = deep;
+    const shallow = new THREE.Mesh(new THREE.PlaneGeometry(244, 7), new THREE.MeshStandardMaterial({ color: 0x74cdec, roughness: 0.2, metalness: 0.18, transparent: true, opacity: 0.85 }));
+    shallow.rotation.x = -Math.PI / 2; shallow.position.set(0, 0.075, -23.5); scene.add(shallow); this.nileShallow = shallow;
 
     // groups
     this.gridGroup = new THREE.Group(); scene.add(this.gridGroup);   // buildable tile lattice
@@ -234,13 +239,14 @@ export class Renderer {
   // Resource buildings render as worker camps: a tent, crates and a worked pile.
   _campModel(id) {
     const grp = new THREE.Group();
-    const tentCol = { quarry: 0xe6dcc6, lumber_camp: 0xb8915a, farm: 0xcfd7a0, well: 0xbcd3df, granite_mine: 0xd8c3cc, copper_mine: 0xd9c2a6 }[id] || 0xcdb892;
+    const tentCol = { quarry: 0xe6dcc6, sand_pit: 0xe6d2a0, lumber_camp: 0xb8915a, farm: 0xcfd7a0, well: 0xbcd3df, granite_mine: 0xd8c3cc, copper_mine: 0xd9c2a6 }[id] || 0xcdb892;
     const tent = new THREE.Mesh(new THREE.ConeGeometry(0.92, 1.0, 4), this._mat(tentCol));
     tent.position.set(-0.5, 0.5, -0.45); tent.rotation.y = Math.PI / 4; tent.castShadow = true; grp.add(tent);
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.25, 5), this._mat(0x7c5530)); pole.position.set(-0.5, 0.62, -0.45); grp.add(pole);
     const flag = this._box(0.26, 0.16, 0.02, 0xc0392b, 0); flag.position.set(-0.37, 1.05, -0.45); grp.add(flag);
     const crate = this._box(0.4, 0.4, 0.4, 0xb98e54, 0.2); crate.position.set(0.55, 0.2, -0.55); grp.add(crate);
     if (id === "quarry") { for (let i = 0; i < 3; i++) { const b = this._box(0.4, 0.4, 0.4, 0xe7d6ad, 0); b.position.set(0.15 + (i % 2) * 0.48, 0.2 + (i > 1 ? 0.4 : 0), 0.5); grp.add(b); } }
+    else if (id === "sand_pit") { for (let i = 0; i < 3; i++) { const s = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.42, 6), this._mat(0xe6c878)); s.position.set(0.12 + (i % 2) * 0.46, 0.21, 0.5); s.castShadow = true; grp.add(s); } const sh = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.55, 0.05), this._mat(0x7c5530)); sh.position.set(-0.05, 0.4, 0.52); sh.rotation.z = 0.5; grp.add(sh); }
     else if (id === "lumber_camp") { for (let i = 0; i < 3; i++) { const log = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.95, 6), this._mat(0x8a5e34)); log.rotation.z = Math.PI / 2; log.position.set(0.4, 0.17 + i * 0.25, 0.5); log.castShadow = true; grp.add(log); } }
     else if (id === "farm") { const fld = this._box(1.5, 0.1, 1.0, 0x6f9a3a, 0.05); fld.position.set(0.3, 0, 0.4); grp.add(fld); for (let i = -1; i <= 1; i++) { const s = this._box(0.08, 0.42, 0.08, 0xd9b24a, 0); s.position.set(0.3 + i * 0.42, 0.26, 0.4); grp.add(s); } }
     else if (id === "well") { const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.42, 0.45, 10), this._mat(0xcdbb95)); ring.position.set(0.42, 0.22, 0.45); ring.castShadow = true; grp.add(ring); const w = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.42, 10), this._mat(0x2a3b55)); w.position.set(0.42, 0.5, 0.45); grp.add(w); }
@@ -407,6 +413,10 @@ export class Renderer {
       const disc = new THREE.Mesh(new THREE.CircleGeometry(0.8, 16), new THREE.MeshStandardMaterial({ color: 0x49b5d6, roughness: 0.25, metalness: 0.1 })); disc.rotation.x = -Math.PI / 2; disc.position.y = 0.09; grp.add(disc);
       const reeds = []; for (let i = 0; i < 4; i++) { const r = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.7, 4), this._mat(0x4f8a3a)); const a = i / 4 * TAU; r.position.set(Math.cos(a) * 0.5, 0.35, Math.sin(a) * 0.5); r.castShadow = true; reeds.push(r); grp.add(r); }
       grp._harvest = reeds;
+    } else if (t === "dune") {
+      const m = new THREE.Mesh(new THREE.ConeGeometry(0.75, 0.5, 6), this._mat(0xe6c878)); m.position.y = 0.2; m.rotation.y = 0.5; m.castShadow = true; m.scale.set(1, 1, 0.8); grp.add(m);
+      const m2 = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.34, 6), this._mat(0xd8b86a)); m2.position.set(0.55, 0.12, 0.2); m2.castShadow = true; grp.add(m2);
+      grp._harvest = [m, m2];
     } else if (t === "granite") {
       const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.55, 0), this._mat(0x9a7a8e)); m.position.y = 0.45; m.castShadow = true; grp.add(m); grp._harvest = [m];
     } else { // copper
@@ -495,7 +505,7 @@ export class Renderer {
     for (const b of BUILDINGS) {
       if (b.cat !== "resource" || !b.effect.produce) continue;
       const res = Object.keys(b.effect.produce)[0], camps = state.buildings[b.id] || 0;
-      if (camps > 0 && this.nodes.some((n) => n.res === res)) want[res] = Math.min(3, 1 + Math.floor(camps / 3));
+      if (camps > 0) want[res] = Math.min(3, 1 + Math.floor(camps / 3)); // workers tend every camp (walk to a node, or work in place)
     }
     let sum = 0; for (const k in want) sum += want[k];
     const CAP = 12; if (sum > CAP) for (const k in want) want[k] = Math.max(1, Math.round(want[k] * CAP / sum));
@@ -815,7 +825,7 @@ export class Renderer {
     const g = wonderGeom(state.wonderIndex), B = g.base, off = (B - 1) / 2;
     let machines = 0; for (const id of ["wooden_rollers", "rope_winch", "sled", "crane", "lubrication", "massive_ramp", "elevator", "marvel"]) machines += state.buildings[id] || 0;
     const target = Math.min(6, 1 + Math.floor(machines / 3));
-    while (this.animals.length < target) { const a = this._makeAnimal(["ox", "ox", "elephant", "croc"][this.animals.length % 4]); this.animalGroup.add(a.grp); this.animals.push(a); }
+    while (this.animals.length < target) { const a = this._makeAnimal(["elephant", "croc", "elephant", "croc"][this.animals.length % 4]); this.animalGroup.add(a.grp); this.animals.push(a); }
     while (this.animals.length > target) { const a = this.animals.pop(); this.animalGroup.remove(a.grp); }
     const speed = 0.3 + Math.min(1.2, (stats.buildRate || 0) * 0.03);
     const rad = B * 0.72 + 4;

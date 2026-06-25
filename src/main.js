@@ -67,19 +67,13 @@ const app = {
     if (ok) { audio.play("buy"); renderer.plopAt(gx, gz); }
     return ok;
   },
-  // A tap on the world: empty buildable tile → build picker; resource node →
-  // harvest; otherwise crack the whip to speed the build.
+  // A tap on the world: empty buildable tile → build picker; otherwise crack
+  // the whip. (Resources are gathered by your workers/camps, not by tapping.)
   tap: (x, y) => {
     ensureAudio();
     const tile = renderer.tileAt(x, y);
     if (tile && !tile.occupied) { ui.openBuildPicker(tile.gx, tile.gz); return; }
     ui.closeBuildPicker();
-    const hit = renderer.harvestAt(x, y);
-    if (hit) {
-      const g = harvestNode(state, hit.res, hit.charge);
-      if (g && g.amount > 0) { ui.floatGain(hit.sx, hit.sy, g.res, g.amount); audio.play("buy"); }
-      return;
-    }
     whip(state); renderer.whipAt(x, y); ui.popup(STR.whipGo, "go");
   },
   toggleMute: (m) => { state.settings.muted = m; audio.setMuted(m); },

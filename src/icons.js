@@ -12,6 +12,8 @@ const RES_ICONS = {
     `<polygon points="5,7 13,5 19,10 17,18 8,19 4,13" fill="${c}"/><polygon points="13,5 19,10 17,18 13,12" fill="${d}"/>`),
   wood: (c, d) => wrap(
     `<rect x="3" y="13" width="18" height="6" rx="3" fill="${d}"/><ellipse cx="6" cy="16" rx="2.4" ry="3" fill="${c}"/><rect x="5" y="6" width="14" height="6" rx="3" fill="${c}"/><ellipse cx="6" cy="9" rx="2.2" ry="3" fill="${d}"/>`),
+  sand: (c, d) => wrap(
+    `<path d="M2 18 Q7 11 12 15 Q17 19 22 13 L22 20 L2 20 Z" fill="${c}"/><path d="M2 18 Q7 11 12 15 Q17 19 22 13 L22 16 Q17 21 12 17 Q7 13 2 20 Z" fill="${d}"/><circle cx="9" cy="9" r="2.4" fill="${c}"/>`),
   copper: (c, d) => wrap(
     `<polygon points="5,15 19,15 16,10 8,10" fill="${c}"/><polygon points="5,15 19,15 19,18 5,18" fill="${d}"/>`),
   food: (c, d) => wrap(

@@ -14,7 +14,7 @@ Relaxing to play, on desktop, mobile (touch), or with a gamepad.
 
 ## ▶ Play
 
-**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=11**
+**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=12**
 
 (Served straight from this branch via raw.githack.com — bump the `?v=` number to bust the cache after updates.)
 
@@ -33,12 +33,10 @@ polished, colourful mobile-game UI:
   and sizes** (a Temple covers 2×2 tiles, a Market or Granary 2×1). Some need a
   neighbour: a **Nile Farm next to a Water Well**, a **Granary next to a Farm**,
   **mines next to a Quarry**, a **Market next to a Village**. Plan your village.
-- **Build worker camps** — quarries, lumber, farms, wells and mines are little
-  tented **camps**. Each sends gatherers out to the resource nodes nearby and
-  steadily stockpiles its resource.
-- **Tap the map to harvest** — the desert is dotted with **trees, stone, ore,
-  crops and water**. Tap a node to send your crews and **collect a burst** of
-  that resource (chips fly, a `+N` floats up). Tapped nodes regrow.
+- **Build worker camps** — quarries, **sand pits**, lumber, farms, wells and
+  mines are little tented **camps**. Each sends labourers out to the trees,
+  stone, sand dunes and ore nearby (or works the camp in place) and steadily
+  stockpiles its resource — **no tapping to gather**, your workers do it.
 - **Watch the real supply line** — sled teams **drag rough stone** from the
   quarry to a **cutting yard**, where a stonecutter **chisels solid rock into a
   dressed brick** (chips fly, the block changes shape). Laborers then carry the
@@ -58,9 +56,8 @@ Step → Bent → Great → Golden → Black Obsidian → Floating Divine → an
 forever, each bigger than the last.
 
 ### Controls
-- **Tap an empty tile** — build there. **Tap a resource node** — harvest a
-  burst. **Tap a worker on the pyramid** — crack the whip. **Drag** to pan,
-  **scroll / pinch** to zoom.
+- **Tap an empty tile** — build there. **Tap a worker on the pyramid** — crack
+  the whip. **Drag** to pan, **scroll / pinch** to zoom.
 - **Space / Enter** — whip. **M** — mute. **+ / −** — zoom. **Esc** — close dialogs.
 - **Gamepad** — A button whips. Progress **auto-saves** and continues **while you're away**.
 
@@ -123,9 +120,10 @@ tools/              # make_card_art.py (deploy art), test_sim.mjs, smoke.mjs, cl
   with scattered palms and greenery. Pure CSS + Three.js over the same DOM/scene.
 - **Procedural resource map** — trees, stone, ore, crops and water nodes are
   placed deterministically from the dynasty seed (its own RNG stream, so saves
-  stay stable). Resource buildings render as **worker camps** whose gatherers
-  walk camp↔node, harvest and carry resources back; tapping a node screen-picks
-  it and pops a burst with flying chips.
+  stay stable). Resource buildings render as **worker camps** whose labourers
+  walk out to the nearest matching node (trees, stone, sand dunes, ore), work
+  it, and carry the resource home — or tend the camp in place when there's no
+  node (wells, farms). Sand is a full resource, dug by a Sand Pit.
 - **A real construction supply line:** sled teams drag rough stone from the
   quarry to a cutting yard; a stonecutter shapes **solid rock → dressed brick**
   (the mesh visibly changes, chips fly, a brick pile grows); masons carry the

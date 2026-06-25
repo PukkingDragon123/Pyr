@@ -5,10 +5,11 @@
 // ============================================================================
 import { makeRng } from "./rng.js";
 
-export const RES = ["limestone", "granite", "wood", "copper", "food", "water"];
+export const RES = ["limestone", "sand", "granite", "wood", "copper", "food", "water"];
 
 export const RES_META = {
   limestone: { name: "Limestone", color: "#e7d6ad", dark: "#b9a373", icon: "limestone" },
+  sand:      { name: "Sand",      color: "#e6c878", dark: "#bb9b4a", icon: "sand" },
   granite:   { name: "Granite",   color: "#c98a9b", dark: "#8e5c6b", icon: "granite" },
   wood:      { name: "Wood",      color: "#b07a44", dark: "#7c5530", icon: "wood" },
   copper:    { name: "Copper",    color: "#e08a4e", dark: "#a85f2e", icon: "copper" },
@@ -17,7 +18,7 @@ export const RES_META = {
 };
 
 export const BASE_CAPS = {
-  limestone: 8000, granite: 2000, wood: 4000, copper: 2000, food: 2500, water: 2500,
+  limestone: 8000, sand: 6000, granite: 2000, wood: 4000, copper: 2000, food: 2500, water: 2500,
 };
 
 export const LIMESTONE_PER_BLOCK = 5; // reduced by Master Masons
@@ -29,12 +30,11 @@ export const PER_BUILDER = 0.5;        // blocks/sec per builder before multipli
 // deterministic from the dynasty seed so the world is stable across reloads.
 // Each cluster sits in the same neighbourhood as the camp that works it.
 // ----------------------------------------------------------------------------
-export const HARVEST_BASE = { limestone: 28, wood: 16, food: 16, water: 16, granite: 7, copper: 7 };
+export const HARVEST_BASE = { limestone: 28, sand: 18, wood: 16, food: 16, water: 16, granite: 7, copper: 7 };
 const NODE_CLUSTERS = [
   { t: "tree",    res: "wood",      n: 7, cx: (B) => -B / 2 - 12, cz: 5,   rx: 7,  rz: 10 },
   { t: "rock",    res: "limestone", n: 8, cx: (B) =>  B / 2 + 11, cz: 0,   rx: 6,  rz: 11 },
-  { t: "crop",    res: "food",      n: 6, cx: (B) => -B / 2 - 5,  cz: -13, rx: 9,  rz: 4 },
-  { t: "water",   res: "water",     n: 5, cx: () => 0,            cz: -22, rx: 20, rz: 3 },
+  { t: "dune",    res: "sand",      n: 6, cx: (B) => -B / 2 - 6,  cz: -12, rx: 9,  rz: 5 },
   { t: "granite", res: "granite",   n: 3, cx: (B) =>  B / 2 + 16, cz: 10,  rx: 4,  rz: 5 },
   { t: "copper",  res: "copper",    n: 3, cx: (B) =>  B / 2 + 16, cz: -11, rx: 4,  rz: 5 },
 ];
@@ -67,6 +67,9 @@ export const BUILDINGS = [
   { id: "quarry", name: "Limestone Quarry", cat: "resource", zone: "quarry", scale: 1.15, unlock: 0,
     desc: "Hews pale limestone — the body of every pyramid.",
     cost: { limestone: 15, wood: 5 }, effect: { produce: { limestone: 1.0 } } },
+  { id: "sand_pit", name: "Sand Pit", cat: "resource", zone: "quarry", scale: 1.15, unlock: 0,
+    desc: "Diggers haul desert sand for mortar, ramps and casing.",
+    cost: { limestone: 12, wood: 4 }, effect: { produce: { sand: 1.1 } } },
   { id: "farm", name: "Nile Farm", cat: "resource", zone: "farm", scale: 1.15, unlock: 0,
     desc: "Riverside fields of grain.",
     cost: { limestone: 18, wood: 8 }, effect: { produce: { food: 0.85 } } },
@@ -86,7 +89,7 @@ export const BUILDINGS = [
   // --- machines: make building faster (+build speed) ---
   { id: "wooden_rollers", name: "Wooden Rollers", cat: "machine", zone: "ramp", scale: 1.15, unlock: 0,
     desc: "Logs under the sled. +4% build speed each.",
-    cost: { wood: 20, limestone: 10 }, effect: { buildSpeed: 0.04 } },
+    cost: { wood: 20, limestone: 10, sand: 8 }, effect: { buildSpeed: 0.04 } },
   { id: "rope_winch", name: "Rope Winch", cat: "machine", zone: "ramp", scale: 1.16, unlock: 40,
     desc: "Palm-rope pulleys. +9% build speed each.",
     cost: { wood: 60, copper: 8 }, effect: { buildSpeed: 0.09 } },
@@ -118,7 +121,7 @@ export const BUILDINGS = [
     cost: { limestone: 60, wood: 40 }, effect: { cap: { food: 800, water: 600 }, produce: { food: 0.3 } } },
   { id: "storage_yard", name: "Storage Yard", cat: "city", zone: "storage", scale: 1.17, unlock: 120,
     desc: "Raises how much you can stockpile.",
-    cost: { wood: 120, limestone: 90 }, effect: { cap: { limestone: 3000, granite: 800, wood: 1200, copper: 700 } } },
+    cost: { wood: 120, limestone: 90, sand: 40 }, effect: { cap: { limestone: 3000, granite: 800, wood: 1200, copper: 700, sand: 2500 } } },
   { id: "docks", name: "River Docks", cat: "city", zone: "nile", scale: 1.18, unlock: 250,
     desc: "Barges on the Nile bring water and trade.",
     cost: { wood: 220, copper: 30 }, effect: { produce: { water: 1.5 }, buildSpeed: 0.02 } },
@@ -136,7 +139,7 @@ export const BUILDINGS = [
 // building (adjacency). Crew / machines / blessings stay in the side menu.
 // ----------------------------------------------------------------------------
 export const TILE = 2.3;                                  // world units per grid cell
-export const PLACEABLE = ["quarry", "well", "farm", "lumber_camp", "granite_mine", "copper_mine", "village", "granary", "storage_yard", "docks", "market", "temple"];
+export const PLACEABLE = ["quarry", "sand_pit", "well", "farm", "lumber_camp", "granite_mine", "copper_mine", "village", "granary", "storage_yard", "docks", "market", "temple"];
 // a building can only go on a tile next to one of these (null = anywhere)
 export const ADJ_REQ = {
   farm: "well", granary: "farm", granite_mine: "quarry", copper_mine: "quarry", market: "village", temple: "market",
