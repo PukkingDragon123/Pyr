@@ -14,7 +14,7 @@ Relaxing to play, on desktop, mobile (touch), or with a gamepad.
 
 ## ▶ Play
 
-**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=7**
+**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=8**
 
 (Served straight from this branch via raw.githack.com — bump the `?v=` number to bust the cache after updates.)
 
@@ -31,9 +31,11 @@ It's a relaxing **city-builder** in the Clash-of-Clans spirit:
 - **Tap the map to harvest** — the desert is dotted with **trees, stone, ore,
   crops and water**. Tap a node to send your crews and **collect a burst** of
   that resource (chips fly, a `+N` floats up). Tapped nodes regrow.
-- **Hire laborers** — every laborer is a worker who **actually walks a block up
-  the ramp and sets it in place** (no teleporting bricks). More laborers and
-  faster machines (sleds, cranes, ramps) = a faster build.
+- **Watch the real supply line** — sled teams **drag rough stone** from the
+  quarry to a **cutting yard**, where a stonecutter **chisels solid rock into a
+  dressed brick** (chips fly, the block changes shape). Laborers then carry the
+  finished bricks up and set them — every block makes the full journey, no
+  teleporting. More laborers and faster machines = a faster build.
 - **Click a worker on the pyramid to crack the whip** — they sprint and everyone
   builds faster for a few seconds.
 - **Limestone** is the building material; if you run short, build more quarries
@@ -106,10 +108,15 @@ tools/              # make_card_art.py (deploy art), test_sim.mjs, smoke.mjs, cl
   stay stable). Resource buildings render as **worker camps** whose gatherers
   walk camp↔node, harvest and carry resources back; tapping a node screen-picks
   it and pops a burst with flying chips.
-- **Animated crews & animals** are procedural low-poly models: workers walk the
-  ramp, bend to place a block and walk back; oxen, elephants and crocodiles
-  roam smooth looped paths (no path-finding, so nothing ever gets stuck) with
-  gait bounce. Dust puffs, chips and ground rings are pooled.
+- **A real construction supply line:** sled teams drag rough stone from the
+  quarry to a cutting yard; a stonecutter shapes **solid rock → dressed brick**
+  (the mesh visibly changes, chips fly, a brick pile grows); masons carry the
+  finished bricks up the ramp (smoothstep-eased climb) and set them in place.
+- **Animated crews & animals** are procedural low-poly models with gait bounce;
+  oxen, elephants and crocodiles roam smooth looped paths (no path-finding, so
+  nothing ever gets stuck). Buildings are detailed but blocky — mud-brick houses
+  with parapets and roof-beams, four-silo granaries, columned temples, market
+  stalls. Dust, chips and ground rings are pooled.
 - **Performance:** instanced pyramid (one draw call), pooled FX, pixel-ratio
   capped at 1.5. Fixed-timestep sim with a seeded RNG; logic fully separate from
   rendering, so the simulation is deterministic and testable headless.

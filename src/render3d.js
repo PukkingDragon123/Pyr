@@ -8,6 +8,7 @@ import { layerCells } from "./iso.js";
 
 export const DAY_LEN = 240;
 const TAU = Math.PI * 2;
+const smooth = (t) => { t = t < 0 ? 0 : t > 1 ? 1 : t; return t * t * (3 - 2 * t); }; // smoothstep ease
 
 // ---- day/night sky + light keyframes ----
 const SKY = [
@@ -43,7 +44,7 @@ export class Renderer {
     const r = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
     r.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5));
     r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
-    r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.05;
+    r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.1;
     r.outputColorSpace = THREE.SRGBColorSpace;
     this.r = r;
 
@@ -81,6 +82,7 @@ export class Renderer {
     // groups
     this.worldGroup = new THREE.Group(); scene.add(this.worldGroup); // buildings/props (rebuilt per wonder layout)
     this.nodeGroup = new THREE.Group(); scene.add(this.nodeGroup);   // procedural resource map (trees/rocks/...)
+    this.supplyGroup = new THREE.Group(); scene.add(this.supplyGroup); // sleds + stone-cutting yard
     this.workerGroup = new THREE.Group(); scene.add(this.workerGroup);
     this.gathererGroup = new THREE.Group(); scene.add(this.gathererGroup);
     this.animalGroup = new THREE.Group(); scene.add(this.animalGroup);
@@ -90,6 +92,7 @@ export class Renderer {
     this.cubeGeo = new THREE.BoxGeometry(0.97, 1, 0.97);
     this.workers = []; this.animals = []; this.puffs = []; this.rings = []; this.chips = [];
     this.gatherers = []; this.nodes = []; this.nodeHits = []; this._nodeKey = "";
+    this.sleds = []; this.cutter = null; this._supplyKey = ""; this._vZoom = 1;
     this._dustTex = this._softTex();
     this._wonderBuilt = -1; this._layoutWonder = -1;
     this._tmpV = new THREE.Vector3(); this._tmpV2 = new THREE.Vector3();
@@ -171,14 +174,45 @@ export class Renderer {
     else if (type === "quarry") { const pit = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.0, 0.3, 8), this._mat(0x9c8763)); pit.position.y = 0.15; pit.receiveShadow = true; grp.add(pit); for (let i = 0; i < 3; i++) add(this._box(0.5, 0.5, 0.5, 0xe3d3aa, 0.4), (i - 1) * 0.55, 0.4, 0.2); }
     else if (type === "granite" || type === "copper") { const mound = new THREE.Mesh(new THREE.ConeGeometry(1.3, 1.1, 7), this._mat(type === "granite" ? 0x8a7a8e : 0x8a7458)); mound.position.y = 0.55; mound.castShadow = true; grp.add(mound); add(this._box(0.5, 0.55, 0.35, 0x1a1320, 0.3), 0, 0.3, 0.95); }
     else if (type === "ramp") { add(this._box(1.4, 0.3, 0.7, 0xb08a5a, 0.15)); const a = this._box(0.16, 1.4, 0.16, 0x7c5530, 0.7); a.position.set(0.5, 0.7, 0); a.rotation.z = -0.5; grp.add(a); }
-    else if (type === "market") { add(this._box(1.2, 0.7, 1.2, 0xb08a5a)); const aw = this._box(1.7, 0.12, 1.7, 0xcf5b4a, 0.95); grp.add(aw); }
-    else if (type === "temple") { add(this._box(3, 1.4, 2.2, 0xe6dcc0)); for (let i = -1; i <= 1; i += 2) for (let k = -1; k <= 1; k += 2) add(this._box(0.28, 1.7, 0.28, 0xefe7cf, 0.85), i * 1.2, 0.85, k * 0.85); const roof = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.3, 2.6), this._mat(0xcaa6df)); roof.position.y = 1.85; roof.castShadow = true; grp.add(roof); }
-    else if (type === "storage") { for (let i = 0; i < 3; i++) add(this._box(0.5, 0.7 + i * 0.1, 0.5, 0xe3d3aa, (0.7 + i * 0.1) / 2), (i - 1) * 0.55, null, 0); }
+    else if (type === "market") {
+      add(this._box(1.3, 0.7, 1.3, 0xb08a5a));
+      for (const [x, z] of [[-0.85, -0.85], [0.85, -0.85], [-0.85, 0.85], [0.85, 0.85]]) { const post = this._box(0.08, 1.05, 0.08, 0x7c5530, 0.52); post.position.x = x; post.position.z = z; grp.add(post); }
+      const aw = this._box(2.0, 0.12, 2.0, 0xcf5b4a, 1.05); grp.add(aw);                         // striped awning
+      for (let i = -1; i <= 1; i++) { const stripe = this._box(0.32, 0.14, 2.0, 0xe8c84a, 1.06); stripe.position.x = i * 0.66; grp.add(stripe); }
+      const crate = this._box(0.32, 0.32, 0.32, 0x9a6b3a, 0.16); crate.position.set(0.5, 0.16, 0.5); grp.add(crate);
+      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 0.32, 8), this._mat(0xc77b46)); pot.position.set(-0.5, 0.16, 0.5); pot.castShadow = true; grp.add(pot);
+    }
+    else if (type === "temple") {
+      add(this._box(3, 1.4, 2.2, 0xe6dcc0));
+      for (let i = -1; i <= 1; i += 2) for (let k = -1; k <= 1; k += 2) { const col = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 1.8, 9), this._mat(0xefe7cf)); col.position.set(i * 1.25, 0.9, k * 0.9); col.castShadow = true; grp.add(col); }
+      const cornice = this._box(3.45, 0.28, 2.65, 0xcaa6df, 1.55); grp.add(cornice);             // flared cornice
+      const roof = this._box(3.05, 0.22, 2.3, 0xb98fce, 1.78); grp.add(roof);
+      const door = this._box(0.62, 0.95, 0.12, 0x2a2233, 0.48); door.position.set(0, 0.48, 1.14); grp.add(door);
+      for (let i = 0; i < 2; i++) { const st = this._box(1.5 - i * 0.34, 0.16, 0.32, 0xd8cdb0, 0.08 + i * 0.16); st.position.set(0, 0.08 + i * 0.16, 1.28 - i * 0.16); grp.add(st); }
+    }
+    else if (type === "storage") {
+      add(this._box(1.7, 0.28, 1.7, 0xc7ab7c, 0.14));                                            // platform
+      for (let i = 0; i < 3; i++) { const h = 0.5 + i * 0.12; const b = this._box(0.46, h, 0.46, 0xe3d3aa, 0.28 + h / 2); b.position.set((i - 1) * 0.52, 0.28 + h / 2, -0.32); grp.add(b); }
+      for (let i = 0; i < 2; i++) { const sack = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 6), this._mat(0xcaa067)); sack.scale.y = 1.25; sack.position.set(i ? 0.45 : -0.45, 0.6, 0.5); sack.castShadow = true; grp.add(sack); }
+    }
     else if (type === "camp") { const t = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1, 4), this._mat(0xd9c39a)); t.position.y = 0.5; t.rotation.y = Math.PI / 4; t.castShadow = true; grp.add(t); }
-    else { // house: village/granary/docks default
-      add(this._box(1.4, 1.1, 1.4, 0xc39568));
-      if (type === "granary") { const d = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 1.2, 10), this._mat(0xd8b87f)); d.position.y = 0.6; d.castShadow = true; grp.add(d); const dome = new THREE.Mesh(new THREE.SphereGeometry(0.7, 10, 6, 0, TAU, 0, Math.PI / 2), this._mat(0xc9a868)); dome.position.y = 1.2; grp.add(dome); }
-      else { const roof = new THREE.Mesh(new THREE.ConeGeometry(1.15, 0.7, 4), this._mat(0xa9763f)); roof.position.y = 1.45; roof.rotation.y = Math.PI / 4; roof.castShadow = true; grp.add(roof); }
+    else if (type === "granary") {
+      add(this._box(1.6, 0.4, 1.6, 0xbf9a6a, 0.2));                                              // mud platform
+      for (const [sx, sz] of [[-0.42, -0.42], [0.42, -0.42], [-0.42, 0.42], [0.42, 0.42]]) {
+        const silo = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.38, 1.0, 12), this._mat(0xd8b87f)); silo.position.set(sx, 0.9, sz); silo.castShadow = true; grp.add(silo);
+        const dome = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 7, 0, TAU, 0, Math.PI / 2), this._mat(0xc9a868)); dome.position.set(sx, 1.4, sz); grp.add(dome);
+      }
+      const lad = this._box(0.06, 1.0, 0.06, 0x7c5530, 0.7); lad.position.set(0.42, 0.7, 0.82); grp.add(lad);
+    }
+    else { // mud-brick house (village / docks default) — detailed but blocky
+      const main = this._box(1.5, 1.0, 1.4, 0xcaa074); grp.add(main);
+      const annex = this._box(0.85, 0.66, 0.85, 0xbd9568, 0.33); annex.position.set(0.95, 0.33, 0.3); grp.add(annex);
+      const roof = this._box(1.64, 0.14, 1.52, 0xb89b6e, 1.07); grp.add(roof);
+      for (const [w, d, x, z] of [[1.64, 0.12, 0, 0.72], [1.64, 0.12, 0, -0.72], [0.12, 1.52, 0.78, 0], [0.12, 1.52, -0.78, 0]]) { const par = this._box(w, 0.22, d, 0xc7ab7c, 1.23); par.position.set(x, 1.23, z); grp.add(par); }
+      for (let i = -1; i <= 1; i++) { const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.74, 5), this._mat(0x7c5530)); beam.rotation.x = Math.PI / 2; beam.position.set(i * 0.45, 1.0, 0); grp.add(beam); }
+      const door = this._box(0.34, 0.56, 0.06, 0x5b3d22, 0.28); door.position.set(-0.22, 0.28, 0.71); grp.add(door);
+      const lintel = this._box(0.46, 0.1, 0.09, 0x8a5e34, 0.6); lintel.position.set(-0.22, 0.6, 0.72); grp.add(lintel);
+      for (const sx of [0.22, 0.5]) { const win = this._box(0.2, 0.22, 0.06, 0x3a2b1a, 0.66); win.position.set(sx, 0.66, 0.71); grp.add(win); }
     }
     return grp;
   }
@@ -373,6 +407,67 @@ export class Renderer {
   }
   _face(w, aim) { w.grp.rotation.y = Math.atan2(aim.x - w.grp.position.x, aim.z - w.grp.position.z); }
 
+  // ---------- construction supply line: sleds (group delivery) + stone-cutting yard ----------
+  _makeSled() {
+    const grp = new THREE.Group();
+    const base = this._box(0.95, 0.14, 1.6, 0x6e4a2a, 0.2); grp.add(base);
+    for (const s of [0.45, -0.45]) { const r = this._box(0.12, 0.12, 1.8, 0x553820, 0.08); r.position.x = s; grp.add(r); }
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.5, 0), this._mat(0xcdbb95)); rock.position.y = 0.62; rock.castShadow = true; grp.add(rock);
+    const pullers = [];
+    for (let i = 0; i < 2; i++) { const p = this._makeWorker(); p.grp.scale.setScalar(0.72); p.grp.position.set(i ? 0.28 : -0.28, 0, 1.2 + i * 0.4); grp.add(p.grp); pullers.push(p); }
+    return { grp, rock, pullers, state: "toYard", timer: 0, phase: Math.random() * TAU };
+  }
+  _buildSupply(state) {
+    const g = wonderGeom(state.wonderIndex), B = g.base, off = (B - 1) / 2;
+    const key = state.wonderIndex + "";
+    if (this._supplyKey === key && this.cutter) return;
+    this._supplyKey = key;
+    while (this.supplyGroup.children.length) this.supplyGroup.remove(this.supplyGroup.children[0]);
+    this.sleds = [];
+    const yardX = -off + B * 0.78, yardZ = -off + B + 1.7;
+    const grp = new THREE.Group(); grp.position.set(yardX, 0, yardZ); this.supplyGroup.add(grp);
+    const table = this._box(1.05, 0.42, 1.15, 0x8a5e34, 0.21); grp.add(table);
+    const rough = new THREE.Mesh(new THREE.DodecahedronGeometry(0.44, 0), this._mat(0xcdbb95)); rough.position.y = 0.66; rough.castShadow = true; grp.add(rough);
+    const brick = this._box(0.5, 0.42, 0.5, 0xe7d6ad, 0.66); brick.visible = false; grp.add(brick);
+    const cutter = this._makeWorker(); cutter.grp.scale.setScalar(0.8); cutter.grp.position.set(0, 0, 0.95); cutter.grp.rotation.y = Math.PI; grp.add(cutter.grp);
+    const stack = []; for (let i = 0; i < 6; i++) { const bk = this._box(0.46, 0.4, 0.46, 0xe3d3aa, 0); bk.position.set(-1.1, 0.2 + Math.floor(i / 2) * 0.42, -0.4 + (i % 2) * 0.6); bk.visible = false; grp.add(bk); stack.push(bk); }
+    this.cutter = { rough, brick, cutter, stack, x: yardX, z: yardZ, t: 0, stockN: 2 };
+    this._yard = new THREE.Vector3(yardX, 0, yardZ);
+  }
+  _updateSupply(state, stats, dt) {
+    if (!this.cutter) return;
+    const g = wonderGeom(state.wonderIndex), B = g.base, off = (B - 1) / 2;
+    const yard = this._yard, quarryPos = this._campPos("limestone", B, off);
+    const whip = !!(state.whip && state.whip.boostT > 0);
+    // sleds: a group drags a rough stone from the quarry to the cutting yard, then returns empty
+    const want = state.complete ? 0 : Math.min(3, Math.floor((state.buildings.quarry || 0) / 2));
+    while (this.sleds.length < want) { const s = this._makeSled(); s.grp.position.copy(quarryPos); this.supplyGroup.add(s.grp); this.sleds.push(s); }
+    while (this.sleds.length > want) { const s = this.sleds.pop(); this.supplyGroup.remove(s.grp); }
+    const sp = (1.5 + Math.min(2.4, (stats.buildRate || 0) * 0.04)) * (whip ? 1.3 : 1) * dt;
+    for (const s of this.sleds) {
+      s.phase += dt; let moving = 0, aim = null;
+      if (s.state === "toYard") { aim = yard; s.rock.visible = true; moving = 1; if (this._stepToward(s.grp.position, yard, sp)) { s.state = "dump"; s.timer = 0.5; } }
+      else if (s.state === "dump") { s.timer -= dt; s.rock.visible = false; if (s.timer <= 0) { s.state = "return"; this.spawnChips(new THREE.Vector3(this.cutter.x, 0.7, this.cutter.z), 0xcdbb95, 4); this.cutter.stockN = Math.min(this.cutter.stack.length, this.cutter.stockN + 1); } }
+      else if (s.state === "return") { aim = quarryPos; s.rock.visible = false; moving = 1; if (this._stepToward(s.grp.position, quarryPos, sp)) { s.state = "load"; s.timer = 0.6 + Math.random() * 0.7; } }
+      else { s.timer -= dt; if (s.timer <= 0) s.state = "toYard"; }
+      if (aim) s.grp.rotation.y = Math.atan2(aim.x - s.grp.position.x, aim.z - s.grp.position.z);
+      for (let i = 0; i < s.pullers.length; i++) { const p = s.pullers[i], sw = Math.sin(s.phase * 9 + i) * (moving ? 0.7 : 0.05); p.legL.rotation.x = sw; p.legR.rotation.x = -sw; p.armL.rotation.x = moving ? -1.1 : -0.1; p.armR.rotation.x = moving ? -1.1 : 0.1; p.body.rotation.x = moving ? 0.45 : 0; }
+      if (s.rock.visible) s.rock.position.y = 0.62 + Math.sin(s.phase * 9) * 0.02;
+    }
+    // cutting station: solid rock → dressed brick, cut by a stonecutter
+    const cs = this.cutter, active = !state.complete;
+    const rate = active ? (0.7 + Math.min(2, (stats.buildRate || 0) * 0.05)) * (whip ? 1.4 : 1) : 0.12;
+    cs.t += dt * rate; cs.cutter.phase += dt;
+    const swingC = Math.abs(Math.sin(cs.cutter.phase * 10));
+    cs.cutter.armL.rotation.x = -1.5 - swingC * 0.8; cs.cutter.armR.rotation.x = -1.5 - swingC * 0.8; cs.cutter.body.rotation.x = 0.3 + swingC * 0.1;
+    const ph = cs.t % 1;
+    if (ph < 0.72) { cs.rough.visible = true; cs.rough.scale.setScalar(1 - ph * 0.18); cs.brick.visible = false; if (active && Math.random() < dt * rate * 7) this.spawnChips(new THREE.Vector3(cs.x, 0.74, cs.z), 0xe7d6ad, 1); }
+    else { const tr = (ph - 0.72) / 0.28; cs.rough.visible = true; cs.rough.scale.setScalar(0.87 * (1 - tr)); cs.brick.visible = true; cs.brick.scale.setScalar(0.35 + 0.65 * tr); }
+    if (cs.t >= 1) { cs.t -= 1; cs.stockN = Math.min(cs.stack.length, cs.stockN + 1); this.spawnChips(new THREE.Vector3(cs.x, 0.74, cs.z), 0xe7d6ad, 5); }
+    if (Math.random() < dt * 0.6 && cs.stockN > 0) cs.stockN -= 1; // masons draw from the pile
+    for (let i = 0; i < cs.stack.length; i++) cs.stack[i].visible = i < cs.stockN;
+  }
+
   // ---------- worker model ----------
   _makeWorker() {
     const i = (Math.random() * SKINS.length) | 0;
@@ -453,7 +548,8 @@ export class Renderer {
 
   _updateCamera(vw, vh, state) {
     const g = wonderGeom(state.wonderIndex);
-    const view = (g.base * 1.95) / this.zoom;
+    this._vZoom += (this.zoom - this._vZoom) * 0.18;        // ease zoom changes
+    const view = (g.base * 1.95) / this._vZoom;
     const aspect = vw / vh;
     this.cam.left = -view * aspect / 2; this.cam.right = view * aspect / 2; this.cam.top = view / 2; this.cam.bottom = -view / 2;
     this.cam.updateProjectionMatrix();
@@ -471,6 +567,7 @@ export class Renderer {
     this._buildPyramid(state);
     this._rebuildLayout(state);
     this._buildNodes(state);
+    this._buildSupply(state);
 
     // day/night sky + sun — start the world in bright mid-morning (+0.22 offset)
     const phase = ((state.clock + DAY_LEN * 0.22) % DAY_LEN) / DAY_LEN, sk = skyAt(phase);
@@ -482,6 +579,7 @@ export class Renderer {
     this._updateCamera(vw, vh, state);
     this._updatePyramid(state);
     this._updateWorkers(state, stats, dt);
+    this._updateSupply(state, stats, dt);
     this._updateGatherers(state, stats, dt);
     this._updateNodes(dt);
     this._updateAnimals(state, stats, dt);
@@ -539,7 +637,7 @@ export class Renderer {
         if (w.timer <= 0 && !state.complete && cells.length) { w.state = "haul"; w.p = 0; w.placed = false; }
       } else if (w.state === "haul") {
         w.p += ms * dt * 0.5; if (w.p >= 1) { w.p = 1; w.state = "place"; w.timer = 0.5 / (w.whipT > 0 ? 1.6 : 1); w.placed = false; }
-        px = footX + (1 - w.p) * w.lane; py = topY * w.p; pz = footZ + (this._topW.z - footZ) * w.p; carry = true; walk = 1;
+        const ep = smooth(w.p); px = footX + (1 - ep) * w.lane; py = topY * ep; pz = footZ + (this._topW.z - footZ) * ep; carry = true; walk = 1;
         if (Math.random() < dt * 3 * ms) this.spawnDust(new THREE.Vector3(px, py + 0.1, pz), 1);
       } else if (w.state === "place") {
         w.timer -= dt; const pr = 1 - Math.max(0, w.timer) / 0.5;
@@ -549,7 +647,7 @@ export class Renderer {
         if (w.timer <= 0) { w.state = "return"; w.p = 1; }
       } else { // return
         w.p -= ms * dt * 0.9; if (w.p <= 0) { w.p = 0; w.state = "fetch"; w.timer = 0.3 + Math.random() * 0.9; }
-        px = footX + (1 - w.p) * w.lane; py = topY * w.p; pz = footZ + (this._topW.z - footZ) * w.p; walk = 1;
+        const ep = smooth(w.p); px = footX + (1 - ep) * w.lane; py = topY * ep; pz = footZ + (this._topW.z - footZ) * ep; walk = 1;
       }
       w.grp.position.set(px, py, pz);
       // face direction of travel (toward the build when hauling, away when returning)
@@ -558,7 +656,7 @@ export class Renderer {
       w.legL.rotation.x = sw; w.legR.rotation.x = -sw;
       w.armL.rotation.x = carry ? -2.2 : -sw; w.armR.rotation.x = carry ? -2.2 : sw;
       w.body.rotation.x = bend * 0.9; w.block.visible = carry;
-      w.grp.position.y += bend * -0.15;
+      w.grp.position.y += bend * -0.15 + Math.sin(w.phase * 8) * 0.025 * walk;   // gait bob
       if (w.whipT > 0) w.grp.position.y += Math.abs(Math.sin(w.phase * 20)) * 0.05;
 
       // project to screen for whip hit-testing
