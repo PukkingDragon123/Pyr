@@ -4,7 +4,7 @@ import {
   RES, BUILDINGS, WORKERS, BLESSINGS, WEATHER,
   LIMESTONE_PER_BLOCK, PER_BUILDER, wonderGeom, blocksForLayer, wonderFor,
   FIRST_WONDER_TOTAL, BASE_CAPS, OFFLINE_CAP_S, OFFLINE_RATE,
-  UNLOCK_LEVEL, levelForXp, questFor, HARVEST_BASE,
+  UNLOCK_LEVEL, levelForXp, questFor, HARVEST_BASE, PLACEABLE, ADJ_REQ,
 } from "./data.js";
 import {
   costFor, canAfford, spend, capsFor, clampResources, resolveQty,
@@ -170,6 +170,33 @@ export function buyBuilding(s, id) {
   if (!canAfford(s.res, cost)) return false;
   spend(s.res, cost); s.buildings[id] = owned + qty; return true;
 }
+// ---- tile-grid placement (Clash-of-Clans village building) ----------------
+export function tileEmpty(s, gx, gz) { return !(s.placements || []).some((p) => p.gx === gx && p.gz === gz); }
+export function adjacencyOK(s, id, gx, gz) {
+  const need = ADJ_REQ[id]; if (!need) return true;
+  return (s.placements || []).some((p) => p.id === need && Math.abs(p.gx - gx) + Math.abs(p.gz - gz) === 1);
+}
+// Why can't this building go on this tile? Returns "" when it can.
+export function placeReason(s, id, gx, gz) {
+  const def = B[id];
+  if (!def || !PLACEABLE.includes(id)) return "no";
+  if (!isUnlocked(s, def)) return "locked";
+  if (!tileEmpty(s, gx, gz)) return "occupied";
+  if (!adjacencyOK(s, id, gx, gz)) return "adjacency";
+  if (!canAfford(s.res, costFor(def, s.buildings[id] || 0, 1))) return "cost";
+  return "";
+}
+export function canPlaceAt(s, id, gx, gz) { return placeReason(s, id, gx, gz) === ""; }
+export function placeBuilding(s, id, gx, gz) {
+  if (!canPlaceAt(s, id, gx, gz)) return false;
+  const def = B[id], owned = s.buildings[id] || 0;
+  spend(s.res, costFor(def, owned, 1));
+  s.buildings[id] = owned + 1;
+  if (!s.placements) s.placements = [];
+  s.placements.push({ id, gx, gz });
+  return true;
+}
+
 export function buyWorker(s, id) {
   const def = W[id]; if (!def || !isUnlocked(s, def)) return false;
   const owned = s.workers[id] || 0, qty = resolveQty(s, def, owned);

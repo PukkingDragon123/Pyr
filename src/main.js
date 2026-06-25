@@ -4,7 +4,7 @@ import { STR } from "../strings.js";
 import { BUILDINGS, WORKERS, BLESSINGS, AUTOSAVE_MS, wonderFor } from "./data.js";
 import {
   step, computeStats, buyBuilding, buyWorker, buyBlessing,
-  doPrestige, legacyGain, isUnlocked, freshlyUnlocked, simulateOffline, whip, harvestNode,
+  doPrestige, legacyGain, isUnlocked, freshlyUnlocked, simulateOffline, whip, harvestNode, placeBuilding,
 } from "./sim.js";
 import { load, save, wipe, exportSave, importSave } from "./save.js";
 import { newGame } from "./state.js";
@@ -61,10 +61,19 @@ const app = {
     }
   },
   whip: (x, y) => { ensureAudio(); whip(state); renderer.whipAt(x, y); ui.popup(STR.whipGo, "go"); },
-  // A tap on the world: harvest a resource node if one is under the pointer,
-  // otherwise crack the whip to speed the build.
+  // place a building on a grid tile
+  place: (id, gx, gz) => {
+    const ok = placeBuilding(state, id, gx, gz);
+    if (ok) { audio.play("buy"); renderer.plopAt(gx, gz); }
+    return ok;
+  },
+  // A tap on the world: empty buildable tile → build picker; resource node →
+  // harvest; otherwise crack the whip to speed the build.
   tap: (x, y) => {
     ensureAudio();
+    const tile = renderer.tileAt(x, y);
+    if (tile && !tile.occupied) { ui.openBuildPicker(tile.gx, tile.gz); return; }
+    ui.closeBuildPicker();
     const hit = renderer.harvestAt(x, y);
     if (hit) {
       const g = harvestNode(state, hit.res, hit.charge);
@@ -109,12 +118,14 @@ const pointers = new Map();
 let downPos = null, moved = 0, pinchDist = 0;
 canvas.addEventListener("pointerdown", (e) => {
   ensureAudio();
+  renderer.hoverTile(null);
   canvas.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pointers.size === 1) { downPos = { x: e.clientX, y: e.clientY, t: performance.now() }; moved = 0; }
   else if (pointers.size === 2) { const p = [...pointers.values()]; pinchDist = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y); }
 });
 canvas.addEventListener("pointermove", (e) => {
+  if (pointers.size === 0) { renderer.hoverTile(e.clientX, e.clientY); return; } // mouse hover → tile highlight
   const prev = pointers.get(e.pointerId); if (!prev) return;
   const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });

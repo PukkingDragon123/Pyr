@@ -3,6 +3,7 @@ import { newGame, costFor, capsFor } from "../src/state.js";
 import {
   step, computeStats, buyBuilding, buyWorker, buyBlessing,
   doPrestige, legacyGain, simulateOffline, isUnlocked, whip, harvestNode,
+  placeBuilding, placeReason,
 } from "../src/sim.js";
 import { wonderGeom, blocksForLayer, wonderFor, FIRST_WONDER_TOTAL, BUILDINGS, WORKERS, genNodes } from "../src/data.js";
 import { fmt, fmtTime } from "../src/format.js";
@@ -45,6 +46,16 @@ const woodBefore = sh.res.wood, got = harvestNode(sh, "wood", 1);
 ok(got.amount > 0 && Math.abs(sh.res.wood - (woodBefore + got.amount)) < 1e-6, "harvestNode grants resource: +" + got.amount + " wood");
 sh.res.granite = capsFor(sh).granite; // already at cap → harvest must not overfill
 ok(harvestNode(sh, "granite", 1).amount === 0 && sh.res.granite <= capsFor(sh).granite + 1, "harvestNode respects cap (no overfill)");
+
+// tile-grid placement + adjacency requirements
+const sp = newGame();
+ok(Array.isArray(sp.placements) && sp.placements.length >= 3, "starter tiles seeded: " + sp.placements.length);
+sp.res.limestone += 5000; sp.res.wood += 5000; sp.res.food += 5000;
+ok(placeReason(sp, "farm", 8, 10) === "adjacency", "farm blocked with no water adjacent: " + placeReason(sp, "farm", 8, 10));
+ok(placeBuilding(sp, "well", 8, 10), "well placed on an empty tile");
+ok(placeBuilding(sp, "farm", 7, 10), "farm places next to the well");
+ok(!placeBuilding(sp, "well", 8, 10), "cannot stack on an occupied tile");
+ok(sp.buildings.farm >= 1 && sp.buildings.well >= 1, "placement increments building counts");
 
 // cost scaling
 const c1 = costFor(BUILDINGS[0], 0, 1), c10 = costFor(BUILDINGS[0], 0, 10);

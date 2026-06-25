@@ -1,6 +1,24 @@
 // Game state: construction, persistence-friendly plain data + pure helpers.
-import { RES, BASE_CAPS, BUILDINGS, WORKERS, WEATHER } from "./data.js";
+import { RES, BASE_CAPS, BUILDINGS, WORKERS, WEATHER, buildableTiles, wonderGeom, ADJ_REQ } from "./data.js";
 import { randSeed, nextRand } from "./rng.js";
+
+// Lay the starter buildings out on the tile grid (adjacency-respecting), so the
+// opening village is valid and the renderer has real positions to draw.
+function seedPlacements(state) {
+  const cells = buildableTiles(wonderGeom(state.wonderIndex).base).slice();
+  cells.sort((a, b) => (a.gx * a.gx + (a.gz - 2) * (a.gz - 2)) - (b.gx * b.gx + (b.gz - 2) * (b.gz - 2)));
+  const used = new Set(), placements = [];
+  const place = (id, near) => {
+    for (const c of cells) {
+      const k = c.gx + "," + c.gz; if (used.has(k)) continue;
+      if (near && !placements.some((p) => p.id === near && Math.abs(p.gx - c.gx) + Math.abs(p.gz - c.gz) === 1)) continue;
+      used.add(k); placements.push({ id, gx: c.gx, gz: c.gz }); return;
+    }
+  };
+  const order = ["quarry", "well", "village", "lumber_camp", "farm", "granite_mine", "copper_mine", "granary", "storage_yard", "docks", "market", "temple"];
+  for (const id of order) { let n = state.buildings[id] || 0; while (n-- > 0) place(id, ADJ_REQ[id]); }
+  state.placements = placements;
+}
 
 export const SAVE_VERSION = 1;
 
@@ -40,6 +58,7 @@ function freshDynasty(state) {
   state.res = res;
   state.buildings = buildings;
   state.workers = workers;
+  seedPlacements(state);        // tile placements {id,gx,gz}; building counts stay authoritative
   state.layer = 0;
   state.blocksInLayer = 0;
   state.capstoneCelebrated = false;

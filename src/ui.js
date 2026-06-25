@@ -4,11 +4,14 @@ import { STR } from "../strings.js";
 import {
   RES, RES_META, BUILDINGS, WORKERS, BLESSINGS,
   WEATHER, wonderFor, wonderGeom, blocksForLayer, UNLOCK_LEVEL, xpInfo, questFor,
+  PLACEABLE, ADJ_REQ, ADJ_LABEL,
 } from "./data.js";
 import { costFor, canAfford, resolveQty } from "./state.js";
-import { isUnlocked, blessingCost, getLevel } from "./sim.js";
+import { isUnlocked, blessingCost, getLevel, placeReason } from "./sim.js";
 import { icon } from "./icons.js";
 import { fmt, fmtInt, fmtTime } from "./format.js";
+
+const BDEF = {}; for (const b of BUILDINGS) BDEF[b.id] = b;
 
 function el(tag, cls, html) {
   const e = document.createElement(tag);
@@ -17,12 +20,14 @@ function el(tag, cls, html) {
   return e;
 }
 
-const CATS = ["resource", "crew", "machine", "city", "blessing"];
+// Resource + city buildings are now placed on map tiles; the dock keeps the
+// non-placed upgrades (crew / machines / blessings).
+const CATS = ["crew", "machine", "blessing"];
 
 export class UI {
   constructor(app) {
     this.app = app;
-    this.tab = "resource";
+    this.tab = "crew";
     this.items = [];
     this.listSig = "";
     this.root = document.getElementById("ui");
@@ -146,11 +151,53 @@ export class UI {
     this.spText = this.speechEl.querySelector(".sp-text");
     r.appendChild(this.speechEl);
 
+    // ---- build picker (opens when you tap an empty tile) ----
+    this.pickerEl = el("div", "picker hidden");
+    r.appendChild(this.pickerEl);
+
     // ---- modals ----
     this._buildModals();
-    this._setTab("resource");
+    this._setTab("crew");
     this._syncQty();
   }
+
+  // tap an empty tile → choose a building to place there
+  openBuildPicker(gx, gz) {
+    this._pickTile = { gx, gz };
+    const state = this.app.getState();
+    this.pickerEl.innerHTML = "";
+    const head = el("div", "pk-head");
+    head.appendChild(el("span", "pk-title", STR.buildHere));
+    const x = el("button", "pk-x", "✕"); x.onclick = () => this.closeBuildPicker();
+    head.appendChild(x);
+    this.pickerEl.appendChild(head);
+    const grid = el("div", "pk-grid");
+    for (const id of PLACEABLE) {
+      const d = BDEF[id]; if (!d) continue;
+      const reason = placeReason(state, id, gx, gz);
+      if (reason === "no") continue;
+      const owned = state.buildings[id] || 0;
+      const cost = costFor(d, owned, 1);
+      const it = el("button", "pk-item");
+      let note = "";
+      if (reason === "locked") note = `<span class="pk-lock">${STR.locked} ${STR.level} ${UNLOCK_LEVEL[id] || 1}</span>`;
+      else if (reason === "adjacency") note = `<span class="pk-req">${STR.needsNear(ADJ_LABEL[ADJ_REQ[id]] || ADJ_REQ[id])}</span>`;
+      let chips = "";
+      for (const rk in cost) chips += `<span class="costchip ${state.res[rk] >= cost[rk] - 1e-6 ? "" : "no"}"><span class="ic">${icon(rk)}</span>${fmt(cost[rk])}</span>`;
+      it.innerHTML = `<span class="pk-ic">${icon(d.cat === "resource" ? "resource" : "city")}</span>
+        <span class="pk-main"><span class="pk-name">${d.name} <span class="cnt">${owned}</span></span>
+        <span class="pk-cost">${chips}</span>${note}</span>`;
+      if (reason !== "") it.classList.add("disabled");
+      it.onclick = () => {
+        if (this.app.place(id, gx, gz)) this.closeBuildPicker();
+        else { const r2 = placeReason(state, id, gx, gz); this.toast(r2 === "cost" ? STR.cantAfford : r2 === "adjacency" ? STR.needsNear(ADJ_LABEL[ADJ_REQ[id]] || ADJ_REQ[id]) : STR.locked, "bad"); }
+      };
+      grid.appendChild(it);
+    }
+    this.pickerEl.appendChild(grid);
+    this.pickerEl.classList.remove("hidden");
+  }
+  closeBuildPicker() { this.pickerEl.classList.add("hidden"); this._pickTile = null; }
 
   popup(text, cls) {
     this.popupEl.textContent = text;

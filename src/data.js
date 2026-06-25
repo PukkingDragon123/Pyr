@@ -131,6 +131,33 @@ export const BUILDINGS = [
 ];
 
 // ----------------------------------------------------------------------------
+// Tile-grid village building (Clash-of-Clans style). Resource + city buildings
+// are PLACED on empty tiles around the pyramid; some require a neighbouring
+// building (adjacency). Crew / machines / blessings stay in the side menu.
+// ----------------------------------------------------------------------------
+export const TILE = 2.3;                                  // world units per grid cell
+export const PLACEABLE = ["quarry", "well", "farm", "lumber_camp", "granite_mine", "copper_mine", "village", "granary", "storage_yard", "docks", "market", "temple"];
+// a building can only go on a tile next to one of these (null = anywhere)
+export const ADJ_REQ = {
+  farm: "well", granary: "farm", granite_mine: "quarry", copper_mine: "quarry", market: "village", temple: "market",
+};
+export const ADJ_LABEL = {
+  well: "a Water Well", farm: "a Nile Farm", quarry: "a Limestone Quarry", village: "a Worker Village", market: "a Grand Market",
+};
+// Buildable tiles for a pyramid of the given base: a ring of cells around the
+// footprint (the pyramid sits in the middle; the far bank is reserved).
+export function buildableTiles(base) {
+  const off = (base - 1) / 2, clear = off + 1.7, cells = [];
+  for (let gx = -8; gx <= 8; gx++) for (let gz = -7; gz <= 10; gz++) {
+    const wx = gx * TILE, wz = gz * TILE;
+    if (Math.abs(wx) < clear && Math.abs(wz) < clear) continue; // under the pyramid
+    if (wz < -off - 11) continue;                               // reserve the far bank toward the Nile
+    cells.push({ gx, gz });
+  }
+  return cells;
+}
+
+// ----------------------------------------------------------------------------
 // Workers. effect keys: builders (haulers added), buildSpeed, prodAll.
 // ----------------------------------------------------------------------------
 export const WORKERS = [

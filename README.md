@@ -14,7 +14,7 @@ Relaxing to play, on desktop, mobile (touch), or with a gamepad.
 
 ## ▶ Play
 
-**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=8**
+**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=9**
 
 (Served straight from this branch via raw.githack.com — bump the `?v=` number to bust the cache after updates.)
 
@@ -23,11 +23,17 @@ crew, and the whip.
 
 ## How to play
 
-It's a relaxing **city-builder** in the Clash-of-Clans spirit:
+It's a relaxing **tile-grid city-builder** in the Clash-of-Clans spirit, with a
+chunky **pixel / Minecraft** UI:
 
-- **Build worker camps** — quarries, lumber, farms, wells and mines all appear
-  as little tented **camps** on the map. Each camp sends gatherers out to the
-  resource nodes nearby and steadily stockpiles its resource.
+- **Tap an empty tile to build** — there's no buy-list for camps any more. Tap a
+  free tile in the desert and a picker shows what you can raise there. Buildings
+  snap **tile-to-tile** on the grid. Some need a neighbour: a **Nile Farm must
+  sit next to a Water Well**, a **Granary next to a Farm**, **mines next to a
+  Quarry**, a **Market next to a Village**. Plan your village.
+- **Build worker camps** — quarries, lumber, farms, wells and mines are little
+  tented **camps**. Each sends gatherers out to the resource nodes nearby and
+  steadily stockpiles its resource.
 - **Tap the map to harvest** — the desert is dotted with **trees, stone, ore,
   crops and water**. Tap a node to send your crews and **collect a burst** of
   that resource (chips fly, a `+N` floats up). Tapped nodes regrow.
@@ -50,8 +56,9 @@ Step → Bent → Great → Golden → Black Obsidian → Floating Divine → an
 forever, each bigger than the last.
 
 ### Controls
-- **Tap a resource node** — harvest a burst. **Tap a worker on the pyramid** —
-  crack the whip. **Drag** to pan, **scroll / pinch** to zoom.
+- **Tap an empty tile** — build there. **Tap a resource node** — harvest a
+  burst. **Tap a worker on the pyramid** — crack the whip. **Drag** to pan,
+  **scroll / pinch** to zoom.
 - **Space / Enter** — whip. **M** — mute. **+ / −** — zoom. **Esc** — close dialogs.
 - **Gamepad** — A button whips. Progress **auto-saves** and continues **while you're away**.
 
@@ -103,6 +110,14 @@ tools/              # make_card_art.py (deploy art), test_sim.mjs, smoke.mjs, cl
   variation so it reads as hand-laid stone, not a slab); cubes are only revealed
   as workers actually deliver and set them — no teleporting bricks. The golden
   capstone drops in on completion.
+- **Tile-grid village building** — a buildable lattice rings the pyramid;
+  pointer rays hit-test to a cell, valid empty tiles highlight, and resource +
+  city buildings are placed (and validated for adjacency) on the grid. The
+  economy keeps building *counts* authoritative, so placement is a layer over
+  the same tested simulation.
+- **Pixel / Minecraft UI** — the HUD is reskinned into carved-sandstone blocks:
+  zero-radius panels with a stone outline and hard (blur-free) shadows, beveled
+  Minecraft-style buttons, monospace caps. Pure CSS over the same DOM.
 - **Procedural resource map** — trees, stone, ore, crops and water nodes are
   placed deterministically from the dynasty seed (its own RNG stream, so saves
   stay stable). Resource buildings render as **worker camps** whose gatherers

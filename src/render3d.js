@@ -3,8 +3,12 @@
 // the ramp (no teleport), animals on smooth looped paths. Same interface as the
 // old Canvas2D renderer so main.js is unchanged except the import.
 import * as THREE from "../vendor/three.module.js";
-import { wonderFor, wonderGeom, BUILDINGS, genNodes } from "./data.js";
+import { wonderFor, wonderGeom, BUILDINGS, genNodes, buildableTiles, TILE, PLACEABLE } from "./data.js";
 import { layerCells } from "./iso.js";
+
+const BUILD_BY_ID = {}; for (const b of BUILDINGS) BUILD_BY_ID[b.id] = b;
+const RES_OF = { quarry: "limestone", lumber_camp: "wood", farm: "food", well: "water", granite_mine: "granite", copper_mine: "copper" };
+const ID_OF_RES = { limestone: "quarry", wood: "lumber_camp", food: "farm", water: "well", granite: "granite_mine", copper: "copper_mine" };
 
 export const DAY_LEN = 240;
 const TAU = Math.PI * 2;
@@ -80,7 +84,8 @@ export class Renderer {
     nile.rotation.x = -Math.PI / 2; nile.position.set(0, 0.05, -34); scene.add(nile); this.nile = nile;
 
     // groups
-    this.worldGroup = new THREE.Group(); scene.add(this.worldGroup); // buildings/props (rebuilt per wonder layout)
+    this.gridGroup = new THREE.Group(); scene.add(this.gridGroup);   // buildable tile lattice
+    this.worldGroup = new THREE.Group(); scene.add(this.worldGroup); // tile-placed buildings
     this.nodeGroup = new THREE.Group(); scene.add(this.nodeGroup);   // procedural resource map (trees/rocks/...)
     this.supplyGroup = new THREE.Group(); scene.add(this.supplyGroup); // sleds + stone-cutting yard
     this.workerGroup = new THREE.Group(); scene.add(this.workerGroup);
@@ -93,6 +98,12 @@ export class Renderer {
     this.workers = []; this.animals = []; this.puffs = []; this.rings = []; this.chips = [];
     this.gatherers = []; this.nodes = []; this.nodeHits = []; this._nodeKey = "";
     this.sleds = []; this.cutter = null; this._supplyKey = ""; this._vZoom = 1;
+    // tile-grid placement
+    this.tileModels = {}; this.machineSlots = {}; this.plops = [];
+    this._gridKey = ""; this._buildSet = new Set(); this._occupied = new Set(); this._nodeTiles = new Set();
+    this._ray = new THREE.Raycaster(); this._groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const hi = new THREE.Mesh(new THREE.PlaneGeometry(TILE * 0.96, TILE * 0.96), new THREE.MeshBasicMaterial({ color: 0x6fe06f, transparent: true, opacity: 0.42, depthWrite: false }));
+    hi.rotation.x = -Math.PI / 2; hi.position.y = 0.05; hi.visible = false; scene.add(hi); this.tileHi = hi;
     this._dustTex = this._softTex();
     this._wonderBuilt = -1; this._layoutWonder = -1;
     this._tmpV = new THREE.Vector3(); this._tmpV2 = new THREE.Vector3();
@@ -244,31 +255,98 @@ export class Renderer {
     };
     return Z[zone];
   }
-  _rebuildLayout(state) {
-    if (this._layoutWonder === state.wonderIndex) { this._refreshBuildings(state); return; }
-    this._layoutWonder = state.wonderIndex;
-    while (this.worldGroup.children.length) this.worldGroup.remove(this.worldGroup.children[0]);
-    this.buildingSlots = {}; // id -> [meshes]
-    this._refreshBuildings(state, true);
+  // model used when a building stands on a tile
+  _placeModel(id) {
+    const b = BUILD_BY_ID[id];
+    if (b && b.cat === "resource") return this._campModel(id);
+    if (id === "granary") return this._buildingModel("granary");
+    if (id === "market") return this._buildingModel("market");
+    if (id === "temple") return this._buildingModel("temple");
+    if (id === "storage_yard") return this._buildingModel("storage");
+    return this._buildingModel("house"); // village, docks
   }
-  _refreshBuildings(state, force) {
+  // buildable tile lattice (rebuilt per wonder)
+  _buildGrid(state) {
+    const key = state.wonderIndex + "";
+    if (this._gridKey === key) return;
+    this._gridKey = key;
+    while (this.gridGroup.children.length) this.gridGroup.remove(this.gridGroup.children[0]);
+    this._buildCells = buildableTiles(wonderGeom(state.wonderIndex).base);
+    this._buildSet = new Set(this._buildCells.map((c) => c.gx + "," + c.gz));
+    const pos = [], h = TILE / 2 - 0.05, y = 0.03;
+    for (const c of this._buildCells) {
+      const x = c.gx * TILE, z = c.gz * TILE;
+      pos.push(x - h, y, z - h, x + h, y, z - h, x + h, y, z - h, x + h, y, z + h, x + h, y, z + h, x - h, y, z + h, x - h, y, z + h, x - h, y, z - h);
+    }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    this.gridGroup.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x70593a, transparent: true, opacity: 0.3 })));
+  }
+  _rebuildLayout(state) {
+    this._buildGrid(state);
+    if (this._layoutWonder !== state.wonderIndex) {
+      this._layoutWonder = state.wonderIndex;
+      while (this.worldGroup.children.length) this.worldGroup.remove(this.worldGroup.children[0]);
+      this.tileModels = {}; this.machineSlots = {}; this._camps = null; this._layoutReady = false; this.plops.length = 0;
+    }
+    this._refreshBuildings(state);
+  }
+  _refreshBuildings(state) {
     const g = wonderGeom(state.wonderIndex), B = g.base, off = (B - 1) / 2;
+    // desired tile → building id: explicit placements first, then auto-fill counts
+    const desired = {}, used = new Set();
+    for (const p of (state.placements || [])) { const k = p.gx + "," + p.gz; if (used.has(k)) continue; used.add(k); desired[k] = p.id; }
+    const explicit = {}; for (const k in desired) explicit[desired[k]] = (explicit[desired[k]] || 0) + 1;
+    const free = (this._buildCells || []).filter((c) => { const k = c.gx + "," + c.gz; return !used.has(k) && !this._nodeTiles.has(k); })
+      .sort((a, b) => (a.gx * a.gx + (a.gz - 2) * (a.gz - 2)) - (b.gx * b.gx + (b.gz - 2) * (b.gz - 2)));
+    let fi = 0;
+    for (const id of PLACEABLE) {
+      let need = (state.buildings[id] || 0) - (explicit[id] || 0);
+      while (need-- > 0 && fi < free.length) { const c = free[fi++], k = c.gx + "," + c.gz; used.add(k); desired[k] = id; }
+    }
+    // diff against rendered models
+    for (const k in this.tileModels) if (desired[k] !== this.tileModels[k].id) { this.worldGroup.remove(this.tileModels[k].grp); delete this.tileModels[k]; }
+    for (const k in desired) {
+      if (this.tileModels[k]) continue;
+      const [gx, gz] = k.split(",").map(Number);
+      const grp = this._placeModel(desired[k]); grp.position.set(gx * TILE, 0, gz * TILE);
+      this.worldGroup.add(grp); this.tileModels[k] = { id: desired[k], grp };
+      if (this._layoutReady) { grp.scale.setScalar(0.01); this.plops.push({ grp, t: 0 }); this.spawnDust(new THREE.Vector3(gx * TILE, 0.3, gz * TILE), 6); this.ring(new THREE.Vector3(gx * TILE, 0.05, gz * TILE), 0xffe0a0); }
+    }
+    this._occupied = used;
+    // machines stay at the ramp zone (not tiled)
+    const z = this._zoneAnchor("ramp", B);
     for (const b of BUILDINGS) {
-      const z = this._zoneAnchor(b.zone, B); if (!z) continue;
-      const want = Math.min(state.buildings[b.id] || 0, 14);
-      let arr = this.buildingSlots[b.id]; if (!arr) arr = this.buildingSlots[b.id] = [];
-      while (arr.length < want) {
-        const i = arr.length, col = i % z[2], row = Math.floor(i / z[2]);
-        const mdl = b.cat === "resource" ? this._campModel(b.id)
-          : this._buildingModel(b.zone === "nile" ? "house" : b.id === "granary" ? "granary" : b.cat === "machine" ? "ramp" : b.zone === "village" ? "house" : b.zone);
-        mdl.position.set((z[0] + col * 1.7) - off, 0, (z[1] + row * 1.7) - off);
-        mdl.rotation.y = (i * 1.3) % TAU * 0.1;
-        this.worldGroup.add(mdl); arr.push(mdl);
-      }
+      if (b.cat !== "machine") continue;
+      const want = Math.min(state.buildings[b.id] || 0, 10);
+      let arr = this.machineSlots[b.id]; if (!arr) arr = this.machineSlots[b.id] = [];
+      while (arr.length < want) { const i = arr.length; const m = this._buildingModel("ramp"); m.position.set((z[0] + (i % z[2]) * 1.6) - off, 0, (z[1] + Math.floor(i / z[2]) * 1.6) - off); this.worldGroup.add(m); arr.push(m); }
       while (arr.length > want) { const mm = arr.pop(); this.worldGroup.remove(mm); }
     }
-    // camps near ramp
     if (!this._camps) { this._camps = []; for (let i = 0; i < 5; i++) { const t = this._buildingModel("camp"); t.position.set((B * 0.5 - 2 + i) - off, 0, (B + 3) - off); this.worldGroup.add(t); this._camps.push(t); } }
+    this._layoutReady = true;
+  }
+  // raycast the pointer to a grid tile (null if not over a buildable tile)
+  tileAt(sx, sy) {
+    if (!this.vw || !this._buildSet.size) return null;
+    this._ray.setFromCamera({ x: sx / this.vw * 2 - 1, y: -(sy / this.vh * 2 - 1) }, this.cam);
+    const hit = this._tmpV2; if (!this._ray.ray.intersectPlane(this._groundPlane, hit)) return null;
+    const gx = Math.round(hit.x / TILE), gz = Math.round(hit.z / TILE), k = gx + "," + gz;
+    if (!this._buildSet.has(k)) return null;
+    return { gx, gz, occupied: this._occupied.has(k) || this._nodeTiles.has(k) };
+  }
+  hoverTile(sx, sy) {
+    const t = (sx == null) ? null : this.tileAt(sx, sy);
+    if (!t || t.occupied) { this.tileHi.visible = false; return null; }
+    this.tileHi.visible = true; this.tileHi.position.set(t.gx * TILE, 0.05, t.gz * TILE);
+    return t;
+  }
+  plopAt(gx, gz) { this.spawnDust(new THREE.Vector3(gx * TILE, 0.3, gz * TILE), 8); this.ring(new THREE.Vector3(gx * TILE, 0.05, gz * TILE), 0xffe0a0); this.kick(0.18); this.tileHi.visible = false; }
+  _updatePlops(dt) {
+    for (let i = this.plops.length - 1; i >= 0; i--) {
+      const p = this.plops[i]; p.t += dt * 3.4;
+      if (p.t >= 1) { p.grp.scale.setScalar(1); this.plops.splice(i, 1); }
+      else { const s = smooth(p.t); p.grp.scale.setScalar(s * (1.12 - 0.12 * s)); } // pop-in with slight overshoot
+    }
   }
 
   // ---------- procedural resource map (nodes you tap to harvest) ----------
@@ -306,12 +384,13 @@ export class Renderer {
     if (this._nodeKey === key && this.nodes.length) return;
     this._nodeKey = key;
     while (this.nodeGroup.children.length) this.nodeGroup.remove(this.nodeGroup.children[0]);
-    this.nodes = [];
+    this.nodes = []; this._nodeTiles = new Set();
     for (const nd of genNodes(state.seed >>> 0, g.base)) {
       const grp = this._nodeModel(nd.t);
       grp.position.set(nd.x, 0, nd.z); grp.rotation.y = nd.rot; grp.scale.setScalar(nd.s);
       this.nodeGroup.add(grp);
       this.nodes.push({ grp, t: nd.t, res: nd.res, x: nd.x, z: nd.z, charge: 1, bounce: 0, harvest: grp._harvest || [] });
+      this._nodeTiles.add(Math.round(nd.x / TILE) + "," + Math.round(nd.z / TILE)); // keep buildings off node tiles
     }
   }
 
@@ -345,6 +424,8 @@ export class Renderer {
 
   // ---------- gatherers (walk camp ↔ node, harvest, carry back) ----------
   _campPos(res, B, off) {
+    const id = ID_OF_RES[res];
+    for (const k in this.tileModels) if (this.tileModels[k].id === id) { const p = this.tileModels[k].grp.position; return new THREE.Vector3(p.x, 0, p.z); }
     const zone = { wood: "lumber", limestone: "quarry", food: "farm", water: "well", granite: "granite", copper: "copper" }[res] || "village";
     const z = this._zoneAnchor(zone, B) || [0, 0, 1, 0];
     return new THREE.Vector3(z[0] - off + 0.7, 0, z[1] - off + 0.7);
@@ -565,8 +646,8 @@ export class Renderer {
   frame(state, stats, dt, vw, vh) {
     this._resize(vw, vh);
     this._buildPyramid(state);
-    this._rebuildLayout(state);
     this._buildNodes(state);
+    this._rebuildLayout(state);
     this._buildSupply(state);
 
     // day/night sky + sun — start the world in bright mid-morning (+0.22 offset)
@@ -583,6 +664,7 @@ export class Renderer {
     this._updateGatherers(state, stats, dt);
     this._updateNodes(dt);
     this._updateAnimals(state, stats, dt);
+    this._updatePlops(dt);
     this._updateFx(dt);
 
     this.r.render(this.scene, this.cam);

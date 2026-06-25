@@ -263,3 +263,70 @@ svg.ic{width:1.15em;height:1.15em;vertical-align:-.18em;flex:0 0 auto}
 @media (max-width:560px){
   .status .weather .wxx{display:none}
 }
+
+/* ============================================================
+   PIXEL / MINECRAFT ARCADE SKIN — blocky carved-sandstone panels,
+   beveled buttons, hard (blur-free) shadows, monospace type.
+   ============================================================ */
+:root{
+  --font:"Courier New",ui-monospace,Menlo,Consolas,monospace;
+  --r1:0px; --r2:0px; --r3:0px;
+  --sh:5px 5px 0 rgba(0,0,0,.5);
+  --stone:#caa24a; --stone-d:#1c130a;
+}
+body{-webkit-font-smoothing:none}
+#c{image-rendering:pixelated}
+.goal,.brand b,h2,.pk-title{text-transform:uppercase;letter-spacing:.5px}
+
+/* kill rounded corners → blocky */
+.chip,.chip .ic,.iconbtn,.tab,.qbtn,.item,.item-ic,.btn,.toggle,.costchip,.bar,.bar .fill,
+.lvlbar,.picker,.pk-item,.pk-ic,.modal,.banner,.toast,.offblk,.quest,.ph-portrait,.speech,.popup{border-radius:0!important}
+
+/* panels = carved sandstone blocks with a stone outline + hard shadow */
+.status,.dock,.chron,.modal,.picker,.quest,.banner{
+  background:linear-gradient(180deg,#3c2c1a,#241a0f)!important;
+  border:3px solid var(--stone-d)!important;
+  box-shadow:0 0 0 3px #6b4f2c,var(--sh)!important;backdrop-filter:none!important}
+
+/* beveled blocky buttons (light top-left, dark bottom-right) */
+.iconbtn,.tab,.qbtn,.btn,.toggle,.item,.pk-item{
+  border:2px solid var(--stone-d)!important;
+  background:linear-gradient(180deg,#6e5230,#4a3520)!important;
+  box-shadow:inset 2px 2px 0 rgba(255,238,200,.22),inset -2px -2px 0 rgba(0,0,0,.42),3px 3px 0 rgba(0,0,0,.4)!important}
+.iconbtn:active,.tab:active,.qbtn:active,.btn:active,.item:active,.pk-item:active{
+  box-shadow:inset 2px 2px 0 rgba(0,0,0,.45),inset -2px -2px 0 rgba(255,238,200,.12)!important;transform:translate(2px,2px)}
+.tab.active,.qbtn.active,.btn.primary{
+  background:linear-gradient(180deg,#e8c24e,#b5872c)!important;color:#241a0f!important;
+  box-shadow:inset 2px 2px 0 rgba(255,255,255,.4),inset -2px -2px 0 rgba(0,0,0,.3),3px 3px 0 rgba(0,0,0,.4)!important}
+.item.disabled,.pk-item.disabled{filter:grayscale(.55) brightness(.72)}
+.item.locked{filter:grayscale(.8) brightness(.62)}
+
+/* resource chips = little stone tiles */
+.chip{background:#2a1d10!important;border:2px solid var(--stone-d)!important;
+  box-shadow:inset 1px 1px 0 rgba(255,238,200,.12),2px 2px 0 rgba(0,0,0,.4)!important}
+.chip .ic{background:#4a3520!important;box-shadow:inset 0 0 0 2px var(--stone-d)!important}
+.chip.legacy{background:linear-gradient(180deg,#5a3f12,#2a1d10)!important}
+
+/* gauges become segmented stone bars */
+.bar{border:2px solid var(--stone-d)!important;background:#1a120a!important;box-shadow:inset 2px 2px 0 rgba(0,0,0,.5)!important}
+.bar .fill{box-shadow:none!important}
+.costchip{border:2px solid var(--stone-d)!important;background:#241a0f!important}
+
+/* ---- build picker (tap an empty tile to open) ---- */
+.picker{position:absolute;left:50%;bottom:122px;transform:translateX(-50%);
+  width:min(440px,calc(100vw - 24px));max-height:46vh;overflow:auto;z-index:18;padding:10px 12px 12px}
+.pk-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.pk-title{font-size:13px;font-weight:800;color:var(--gold)}
+.pk-x{width:26px;height:26px;font-size:12px;color:var(--text)}
+.pk-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pk-item{display:flex;align-items:center;gap:8px;padding:8px;text-align:left}
+.pk-ic{width:34px;height:34px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;background:#4a3520;border:2px solid var(--stone-d)}
+.pk-ic>svg.ic{width:70%;height:70%}
+.pk-main{display:flex;flex-direction:column;gap:3px;min-width:0}
+.pk-name{font-size:12.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pk-name .cnt{color:var(--dim);font-size:11px}
+.pk-cost{display:flex;gap:4px;flex-wrap:wrap}
+.pk-cost .costchip{font-size:10px;padding:1px 5px}
+.pk-req{font-size:10px;color:var(--warn)}
+.pk-lock{font-size:10px;color:var(--bad)}
+@media (max-width:560px){.picker{bottom:110px}.pk-grid{grid-template-columns:1fr}}
