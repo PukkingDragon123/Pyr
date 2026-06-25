@@ -17,13 +17,13 @@ console.log("format:", fmt(0), fmt(1234), fmt(3.2e9), fmt(1e21), "|", fmtTime(12
 
 const s = newGame();
 ok(finite(s.res), "fresh resources finite");
-ok(s.buildings.quarry === 1 && s.workers.laborer === 3, "starter present");
+ok((s.buildings.quarry || 0) === 0 && (s.workers.laborer || 0) === 0, "starts from absolute zero (nothing prebuilt)");
 ok(s.whip && s.quests, "whip + quests state present");
 
 // simulate ~20 min, buying greedily
 for (let t = 0; t < 1200; t++) {
   step(s, 1);
-  if (t % 5 === 0) { for (const b of BUILDINGS) if (isUnlocked(s, b)) buyBuilding(s, b.id); for (const w of WORKERS) if (isUnlocked(s, w)) buyWorker(s, w.id); }
+  if (t % 5 === 0) { for (let i = 0; i < 3; i++) buyWorker(s, "laborer"); for (const w of WORKERS) if (isUnlocked(s, w)) buyWorker(s, w.id); for (const b of BUILDINGS) if (isUnlocked(s, b)) buyBuilding(s, b.id); }
 }
 const st = computeStats(s);
 console.log("after 20min: blocks=", fmt(s.stats.totalBlocksAllTime), "layer=", s.layer, "builders=", fmt(st.builders), "buildRate=", fmt(st.buildRate), "weather=", s.weather.id);
@@ -49,7 +49,7 @@ ok(harvestNode(sh, "granite", 1).amount === 0 && sh.res.granite <= capsFor(sh).g
 
 // tile-grid placement + adjacency requirements
 const sp = newGame();
-ok(Array.isArray(sp.placements) && sp.placements.length >= 3, "starter tiles seeded: " + sp.placements.length);
+ok(Array.isArray(sp.placements) && sp.placements.length === 0, "no tiles placed at zero start: " + sp.placements.length);
 sp.res.limestone += 5000; sp.res.wood += 5000; sp.res.food += 5000;
 ok(placeReason(sp, "farm", 8, 10) === "adjacency", "farm blocked with no water adjacent: " + placeReason(sp, "farm", 8, 10));
 ok(placeBuilding(sp, "well", 8, 10), "well placed on an empty tile");

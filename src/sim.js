@@ -5,6 +5,7 @@ import {
   LIMESTONE_PER_BLOCK, PER_BUILDER, wonderGeom, blocksForLayer, wonderFor,
   FIRST_WONDER_TOTAL, BASE_CAPS, OFFLINE_CAP_S, OFFLINE_RATE,
   UNLOCK_LEVEL, levelForXp, questFor, HARVEST_BASE, PLACEABLE, ADJ_REQ,
+  footprintCells, buildableTiles,
 } from "./data.js";
 import {
   costFor, canAfford, spend, capsFor, clampResources, resolveQty,
@@ -171,18 +172,37 @@ export function buyBuilding(s, id) {
   spend(s.res, cost); s.buildings[id] = owned + qty; return true;
 }
 // ---- tile-grid placement (Clash-of-Clans village building) ----------------
-export function tileEmpty(s, gx, gz) { return !(s.placements || []).some((p) => p.gx === gx && p.gz === gz); }
-export function adjacencyOK(s, id, gx, gz) {
+let _bsetBase = -1, _bset = null;
+function buildableSet(s) {
+  const base = wonderGeom(s.wonderIndex).base;
+  if (_bsetBase !== base) { _bsetBase = base; _bset = new Set(buildableTiles(base).map((c) => c.gx + "," + c.gz)); }
+  return _bset;
+}
+// id occupying each cell currently covered by a placement footprint
+function occMap(s) {
+  const m = {};
+  for (const p of s.placements || []) for (const [x, z] of footprintCells(p.id, p.gx, p.gz)) m[x + "," + z] = p.id;
+  return m;
+}
+function adjOK(s, id, cells) {
   const need = ADJ_REQ[id]; if (!need) return true;
-  return (s.placements || []).some((p) => p.id === need && Math.abs(p.gx - gx) + Math.abs(p.gz - gz) === 1);
+  const occ = occMap(s), inFp = new Set(cells.map((c) => c[0] + "," + c[1]));
+  for (const [x, z] of cells) for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const k = (x + dx) + "," + (z + dz);
+    if (!inFp.has(k) && occ[k] === need) return true;
+  }
+  return false;
 }
 // Why can't this building go on this tile? Returns "" when it can.
 export function placeReason(s, id, gx, gz) {
   const def = B[id];
   if (!def || !PLACEABLE.includes(id)) return "no";
   if (!isUnlocked(s, def)) return "locked";
-  if (!tileEmpty(s, gx, gz)) return "occupied";
-  if (!adjacencyOK(s, id, gx, gz)) return "adjacency";
+  const bset = buildableSet(s), cells = footprintCells(id, gx, gz);
+  if (!cells.every(([x, z]) => bset.has(x + "," + z))) return "space";   // footprint runs off the buildable grid
+  const occ = occMap(s);
+  if (cells.some(([x, z]) => occ[x + "," + z])) return "occupied";
+  if (!adjOK(s, id, cells)) return "adjacency";
   if (!canAfford(s.res, costFor(def, s.buildings[id] || 0, 1))) return "cost";
   return "";
 }

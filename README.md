@@ -14,7 +14,7 @@ Relaxing to play, on desktop, mobile (touch), or with a gamepad.
 
 ## ▶ Play
 
-**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=9**
+**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=10**
 
 (Served straight from this branch via raw.githack.com — bump the `?v=` number to bust the cache after updates.)
 
@@ -26,11 +26,13 @@ crew, and the whip.
 It's a relaxing **tile-grid city-builder** in the Clash-of-Clans spirit, with a
 chunky **pixel / Minecraft** UI:
 
-- **Tap an empty tile to build** — there's no buy-list for camps any more. Tap a
-  free tile in the desert and a picker shows what you can raise there. Buildings
-  snap **tile-to-tile** on the grid. Some need a neighbour: a **Nile Farm must
-  sit next to a Water Well**, a **Granary next to a Farm**, **mines next to a
-  Quarry**, a **Market next to a Village**. Plan your village.
+- **Start from an empty plot** — nothing is prebuilt. You begin with a little
+  stone and grain and raise *everything* yourself.
+- **Tap an empty tile to build** — tap a free tile and a picker shows what you
+  can raise there. Buildings snap **tile-to-tile** and come in **different shapes
+  and sizes** (a Temple covers 2×2 tiles, a Market or Granary 2×1). Some need a
+  neighbour: a **Nile Farm next to a Water Well**, a **Granary next to a Farm**,
+  **mines next to a Quarry**, a **Market next to a Village**. Plan your village.
 - **Build worker camps** — quarries, lumber, farms, wells and mines are little
   tented **camps**. Each sends gatherers out to the resource nodes nearby and
   steadily stockpiles its resource.
@@ -127,6 +129,11 @@ tools/              # make_card_art.py (deploy art), test_sim.mjs, smoke.mjs, cl
   quarry to a cutting yard; a stonecutter shapes **solid rock → dressed brick**
   (the mesh visibly changes, chips fly, a brick pile grows); masons carry the
   finished bricks up the ramp (smoothstep-eased climb) and set them in place.
+- **Workers you can count** — the crew on the pyramid is rendered to your actual
+  builder count (you start with none and *see* every laborer you hire). Every
+  human and animal has little **black dot eyes**, hands, feet and a belt; oxen
+  and elephants have ears and tails. Animation is fluid: idle breathing, head
+  bob, springy (damped) arm follow-through, tail/ear sway.
 - **Animated crews & animals** are procedural low-poly models with gait bounce;
   oxen, elephants and crocodiles roam smooth looped paths (no path-finding, so
   nothing ever gets stuck). Buildings are detailed but blocky — mud-brick houses

@@ -156,6 +156,14 @@ export function buildableTiles(base) {
   }
   return cells;
 }
+// Footprint (in tiles) per building — bigger civic buildings cover more ground,
+// so the village has varied shapes & sizes. Anchor is the min corner (gx,gz).
+export const SIZE = { temple: [2, 2], market: [2, 1], granary: [2, 1], storage_yard: [2, 1] };
+export function footprintCells(id, gx, gz) {
+  const s = SIZE[id] || [1, 1], out = [];
+  for (let x = 0; x < s[0]; x++) for (let z = 0; z < s[1]; z++) out.push([gx + x, gz + z]);
+  return out;
+}
 
 // ----------------------------------------------------------------------------
 // Workers. effect keys: builders (haulers added), buildSpeed, prodAll.

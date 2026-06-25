@@ -22,9 +22,11 @@ function seedPlacements(state) {
 
 export const SAVE_VERSION = 1;
 
-const STARTER_RES = { limestone: 60, granite: 0, wood: 25, copper: 0, food: 30, water: 30 };
-const STARTER_BUILDINGS = { quarry: 1, farm: 1, well: 1, wooden_rollers: 1, village: 1 };
-const STARTER_WORKERS = { laborer: 3 };
+// Start from absolute zero — no prebuilt camps or crew. Just enough resources
+// in the granary to lay your first few buildings and hire your first laborers.
+const STARTER_RES = { limestone: 130, granite: 0, wood: 60, copper: 0, food: 60, water: 45 };
+const STARTER_BUILDINGS = {};
+const STARTER_WORKERS = {};
 
 function emptyCounts(list) {
   const o = {}; for (const x of list) o[x.id] = 0; return o;

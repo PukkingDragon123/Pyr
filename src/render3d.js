@@ -3,7 +3,7 @@
 // the ramp (no teleport), animals on smooth looped paths. Same interface as the
 // old Canvas2D renderer so main.js is unchanged except the import.
 import * as THREE from "../vendor/three.module.js";
-import { wonderFor, wonderGeom, BUILDINGS, genNodes, buildableTiles, TILE, PLACEABLE } from "./data.js";
+import { wonderFor, wonderGeom, BUILDINGS, genNodes, buildableTiles, TILE, PLACEABLE, SIZE, footprintCells } from "./data.js";
 import { layerCells } from "./iso.js";
 
 const BUILD_BY_ID = {}; for (const b of BUILDINGS) BUILD_BY_ID[b.id] = b;
@@ -105,6 +105,8 @@ export class Renderer {
     const hi = new THREE.Mesh(new THREE.PlaneGeometry(TILE * 0.96, TILE * 0.96), new THREE.MeshBasicMaterial({ color: 0x6fe06f, transparent: true, opacity: 0.42, depthWrite: false }));
     hi.rotation.x = -Math.PI / 2; hi.position.y = 0.05; hi.visible = false; scene.add(hi); this.tileHi = hi;
     this._dustTex = this._softTex();
+    this._black = new THREE.MeshStandardMaterial({ color: 0x15151b, roughness: 0.5 }); // dot eyes
+    this._eyeGeo = new THREE.BoxGeometry(0.06, 0.08, 0.04);
     this._wonderBuilt = -1; this._layoutWonder = -1;
     this._tmpV = new THREE.Vector3(); this._tmpV2 = new THREE.Vector3();
   }
@@ -292,27 +294,40 @@ export class Renderer {
   }
   _refreshBuildings(state) {
     const g = wonderGeom(state.wonderIndex), B = g.base, off = (B - 1) / 2;
-    // desired tile → building id: explicit placements first, then auto-fill counts
-    const desired = {}, used = new Set();
-    for (const p of (state.placements || [])) { const k = p.gx + "," + p.gz; if (used.has(k)) continue; used.add(k); desired[k] = p.id; }
+    // desired anchor-tile → building id (everything is placed explicitly now)
+    const desired = {}, occ = new Set();
+    for (const p of (state.placements || [])) {
+      const k = p.gx + "," + p.gz; if (desired[k]) continue; desired[k] = p.id;
+      for (const [x, z] of footprintCells(p.id, p.gx, p.gz)) occ.add(x + "," + z);
+    }
+    // safety net: render any building count not covered by an explicit placement
+    // (legacy saves / test fixtures) by auto-filling free footprints
     const explicit = {}; for (const k in desired) explicit[desired[k]] = (explicit[desired[k]] || 0) + 1;
-    const free = (this._buildCells || []).filter((c) => { const k = c.gx + "," + c.gz; return !used.has(k) && !this._nodeTiles.has(k); })
+    const free = (this._buildCells || []).filter((c) => !this._nodeTiles.has(c.gx + "," + c.gz))
       .sort((a, b) => (a.gx * a.gx + (a.gz - 2) * (a.gz - 2)) - (b.gx * b.gx + (b.gz - 2) * (b.gz - 2)));
-    let fi = 0;
     for (const id of PLACEABLE) {
       let need = (state.buildings[id] || 0) - (explicit[id] || 0);
-      while (need-- > 0 && fi < free.length) { const c = free[fi++], k = c.gx + "," + c.gz; used.add(k); desired[k] = id; }
+      if (need <= 0) continue;
+      for (const c of free) {
+        if (need <= 0) break;
+        const cells = footprintCells(id, c.gx, c.gz), k = c.gx + "," + c.gz;
+        if (desired[k] || !cells.every(([x, z]) => this._buildSet.has(x + "," + z) && !occ.has(x + "," + z))) continue;
+        desired[k] = id; for (const [x, z] of cells) occ.add(x + "," + z); need--;
+      }
     }
     // diff against rendered models
     for (const k in this.tileModels) if (desired[k] !== this.tileModels[k].id) { this.worldGroup.remove(this.tileModels[k].grp); delete this.tileModels[k]; }
     for (const k in desired) {
       if (this.tileModels[k]) continue;
-      const [gx, gz] = k.split(",").map(Number);
-      const grp = this._placeModel(desired[k]); grp.position.set(gx * TILE, 0, gz * TILE);
-      this.worldGroup.add(grp); this.tileModels[k] = { id: desired[k], grp };
-      if (this._layoutReady) { grp.scale.setScalar(0.01); this.plops.push({ grp, t: 0 }); this.spawnDust(new THREE.Vector3(gx * TILE, 0.3, gz * TILE), 6); this.ring(new THREE.Vector3(gx * TILE, 0.05, gz * TILE), 0xffe0a0); }
+      const [gx, gz] = k.split(",").map(Number), id = desired[k], sz = SIZE[id] || [1, 1];
+      const grp = this._placeModel(id);
+      grp.position.set((gx + (sz[0] - 1) / 2) * TILE, 0, (gz + (sz[1] - 1) / 2) * TILE); // footprint centre
+      const fs = Math.max(sz[0], sz[1]) > 1 ? Math.max(sz[0], sz[1]) * 0.92 : 1;          // bigger footprint → bigger model
+      this.worldGroup.add(grp); this.tileModels[k] = { id, grp, scale: fs };
+      if (this._layoutReady) { grp.scale.setScalar(0.01); this.plops.push({ grp, t: 0, target: fs }); this.spawnDust(new THREE.Vector3(gx * TILE, 0.3, gz * TILE), 6); this.ring(new THREE.Vector3(gx * TILE, 0.05, gz * TILE), 0xffe0a0); }
+      else grp.scale.setScalar(fs);
     }
-    this._occupied = used;
+    this._occupied = occ;
     // machines stay at the ramp zone (not tiled)
     const z = this._zoneAnchor("ramp", B);
     for (const b of BUILDINGS) {
@@ -322,7 +337,6 @@ export class Renderer {
       while (arr.length < want) { const i = arr.length; const m = this._buildingModel("ramp"); m.position.set((z[0] + (i % z[2]) * 1.6) - off, 0, (z[1] + Math.floor(i / z[2]) * 1.6) - off); this.worldGroup.add(m); arr.push(m); }
       while (arr.length > want) { const mm = arr.pop(); this.worldGroup.remove(mm); }
     }
-    if (!this._camps) { this._camps = []; for (let i = 0; i < 5; i++) { const t = this._buildingModel("camp"); t.position.set((B * 0.5 - 2 + i) - off, 0, (B + 3) - off); this.worldGroup.add(t); this._camps.push(t); } }
     this._layoutReady = true;
   }
   // raycast the pointer to a grid tile (null if not over a buildable tile)
@@ -343,9 +357,9 @@ export class Renderer {
   plopAt(gx, gz) { this.spawnDust(new THREE.Vector3(gx * TILE, 0.3, gz * TILE), 8); this.ring(new THREE.Vector3(gx * TILE, 0.05, gz * TILE), 0xffe0a0); this.kick(0.18); this.tileHi.visible = false; }
   _updatePlops(dt) {
     for (let i = this.plops.length - 1; i >= 0; i--) {
-      const p = this.plops[i]; p.t += dt * 3.4;
-      if (p.t >= 1) { p.grp.scale.setScalar(1); this.plops.splice(i, 1); }
-      else { const s = smooth(p.t); p.grp.scale.setScalar(s * (1.12 - 0.12 * s)); } // pop-in with slight overshoot
+      const p = this.plops[i]; p.t += dt * 3.4; const tg = p.target || 1;
+      if (p.t >= 1) { p.grp.scale.setScalar(tg); this.plops.splice(i, 1); }
+      else { const s = smooth(p.t); p.grp.scale.setScalar(tg * s * (1.12 - 0.12 * s)); } // pop-in with slight overshoot
     }
   }
 
@@ -480,10 +494,13 @@ export class Renderer {
       const swing = Math.sin(w.phase * 9) * (walk ? 0.8 : 0.05);
       const bend = chop ? Math.abs(Math.sin(w.phase * 11)) * 0.6 : 0;
       w.legL.rotation.x = swing; w.legR.rotation.x = -swing;
-      w.armL.rotation.x = carry ? -2.0 : chop ? -1.7 - bend : -swing;
-      w.armR.rotation.x = carry ? -2.0 : chop ? -1.7 - bend : swing;
+      const tAL = carry ? -2.0 : chop ? -1.7 - bend : -swing, tAR = carry ? -2.0 : chop ? -1.7 - bend : swing;
+      w.aL += (tAL - w.aL) * 0.3; w.aR += (tAR - w.aR) * 0.3;
+      w.armL.rotation.x = w.aL; w.armR.rotation.x = w.aR;
       w.body.rotation.x = chop ? 0.3 : 0;
-      w.block.visible = carry; w.grp.position.y = 0;
+      w.body.scale.y = 1 + Math.sin(w.breathe + w.phase * 2.4) * 0.045;
+      w.head.rotation.x = (chop ? 0.25 : 0) + Math.sin(w.phase * 4) * 0.05 * (walk ? 1 : 0.3);
+      w.block.visible = carry; w.grp.position.y = walk ? Math.sin(w.phase * 9) * 0.02 : 0;
     }
   }
   _face(w, aim) { w.grp.rotation.y = Math.atan2(aim.x - w.grp.position.x, aim.z - w.grp.position.z); }
@@ -512,7 +529,7 @@ export class Renderer {
     const brick = this._box(0.5, 0.42, 0.5, 0xe7d6ad, 0.66); brick.visible = false; grp.add(brick);
     const cutter = this._makeWorker(); cutter.grp.scale.setScalar(0.8); cutter.grp.position.set(0, 0, 0.95); cutter.grp.rotation.y = Math.PI; grp.add(cutter.grp);
     const stack = []; for (let i = 0; i < 6; i++) { const bk = this._box(0.46, 0.4, 0.46, 0xe3d3aa, 0); bk.position.set(-1.1, 0.2 + Math.floor(i / 2) * 0.42, -0.4 + (i % 2) * 0.6); bk.visible = false; grp.add(bk); stack.push(bk); }
-    this.cutter = { rough, brick, cutter, stack, x: yardX, z: yardZ, t: 0, stockN: 2 };
+    this.cutter = { grp, rough, brick, cutter, stack, x: yardX, z: yardZ, t: 0, stockN: 2 };
     this._yard = new THREE.Vector3(yardX, 0, yardZ);
   }
   _updateSupply(state, stats, dt) {
@@ -536,7 +553,9 @@ export class Renderer {
       if (s.rock.visible) s.rock.position.y = 0.62 + Math.sin(s.phase * 9) * 0.02;
     }
     // cutting station: solid rock → dressed brick, cut by a stonecutter
-    const cs = this.cutter, active = !state.complete;
+    const cs = this.cutter;
+    cs.grp.visible = (state.buildings.quarry || 0) > 0;   // no stone-cutting yard until you quarry
+    const active = !state.complete && cs.grp.visible;
     const rate = active ? (0.7 + Math.min(2, (stats.buildRate || 0) * 0.05)) * (whip ? 1.4 : 1) : 0.12;
     cs.t += dt * rate; cs.cutter.phase += dt;
     const swingC = Math.abs(Math.sin(cs.cutter.phase * 10));
@@ -555,19 +574,25 @@ export class Renderer {
     const skin = this._mat(SKINS[i]), cloth = this._mat(CLOTHS[(Math.random() * CLOTHS.length) | 0]), kilt = this._mat(0xefe7d2);
     const grp = new THREE.Group();
     const legL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.5, 0.16), skin); legL.geometry.translate(0, -0.25, 0); legL.position.set(0.1, 0.5, 0); legL.castShadow = true;
+    const footL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.1, 0.24), kilt); footL.position.set(0, -0.5, 0.04); legL.add(footL);
     const legR = legL.clone(); legR.position.x = -0.1;
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.45, 0.24), skin); body.position.y = 0.74; body.castShadow = true;
+    const belt = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.08, 0.28), this._mat(0x7c5530)); belt.position.y = -0.18; body.add(belt);
     const kiltM = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.22, 0.28), kilt); kiltM.position.y = 0.56;
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.26), skin); head.position.y = 1.12; head.castShadow = true;
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.16, 0.3), cloth); cap.position.y = 1.26;
+    const eyeL = new THREE.Mesh(this._eyeGeo, this._black); eyeL.position.set(0.07, 0.02, 0.135); head.add(eyeL);
+    const eyeR = eyeL.clone(); eyeR.position.x = -0.07; head.add(eyeR);
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.16, 0.3), cloth); cap.position.y = 0.18; head.add(cap);
     const armL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.42, 0.12), skin); armL.geometry.translate(0, -0.21, 0); armL.position.set(0.26, 0.96, 0); armL.castShadow = true;
+    const handL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.12, 0.14), skin); handL.position.set(0, -0.44, 0); armL.add(handL);
     const armR = armL.clone(); armR.position.x = -0.26;
     const block = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.32, 0.34), this._mat(0xe3d3aa)); block.position.set(0, 1.4, 0.05); block.visible = false; block.castShadow = true;
-    grp.add(legL, legR, body, kiltM, head, cap, armL, armR, block);
+    grp.add(legL, legR, body, kiltM, head, armL, armR, block);
     grp.scale.setScalar(0.8);
     return { grp, legL, legR, armL, armR, block, body, head,
       state: "fetch", target: -1, p: 0, phase: Math.random() * TAU, timer: Math.random() * 1.2, placed: false,
-      lane: (Math.random() - 0.5) * 3.2, foot: Math.random() * 4, whipT: 0 };
+      lane: (Math.random() - 0.5) * 3.2, foot: Math.random() * 4, whipT: 0,
+      aL: 0, aR: 0, breathe: Math.random() * TAU };
   }
 
   // ---------- animal models ----------
@@ -584,11 +609,20 @@ export class Renderer {
       const lg = new THREE.Mesh(new THREE.BoxGeometry(type === "elephant" ? 0.2 : 0.13, legLen, type === "elephant" ? 0.2 : 0.13), bodyMat);
       lg.geometry.translate(0, -legLen / 2, 0); lg.position.set(sx * (type === "croc" ? 1.6 : 1.1), legLen, sz); lg.castShadow = true; grp.add(lg); legs.push(lg);
     }
-    const head = new THREE.Mesh(new THREE.BoxGeometry(type === "elephant" ? 0.7 : 0.5, type === "croc" ? 0.3 : 0.5, type === "croc" ? 0.7 : 0.5), bodyMat);
+    const hx = type === "elephant" ? 0.7 : 0.5, hy = type === "croc" ? 0.3 : 0.5, hz = type === "croc" ? 0.7 : 0.5;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(hx, hy, hz), bodyMat);
     head.position.set((type === "croc" ? 1.0 : 0.7), body.position.y + (type === "croc" ? 0 : 0.1), 0); head.castShadow = true; grp.add(head);
-    if (type === "ox") { for (const s of [0.12, -0.12]) { const horn = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.3, 5), this._mat(0xefe7d0)); horn.position.set(0.85, body.position.y + 0.35, s); horn.rotation.z = -0.5; grp.add(horn); } }
-    if (type === "elephant") { const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 0.7, 6), bodyMat); tr.position.set(1.05, body.position.y - 0.1, 0); tr.rotation.z = 0.7; grp.add(tr); }
-    return { grp, legs, type, t: Math.random(), sp: 0.04 + Math.random() * 0.04, phase: Math.random() * TAU };
+    // black dot eyes on the head front (+x)
+    const eyeL = new THREE.Mesh(this._eyeGeo, this._black); eyeL.position.set(hx * 0.46, hy * 0.12, hz * 0.28); head.add(eyeL);
+    const eyeR = eyeL.clone(); eyeR.position.z = -hz * 0.28; head.add(eyeR);
+    // ears
+    if (type === "ox") { for (const s of [0.12, -0.12]) { const horn = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.3, 5), this._mat(0xefe7d0)); horn.position.set(0.2, 0.32, s); horn.rotation.z = -0.5; head.add(horn); } for (const s of [0.22, -0.22]) { const ear = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.1), bodyMat); ear.position.set(-0.05, 0.14, s); head.add(ear); } }
+    if (type === "elephant") { const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 0.7, 6), bodyMat); tr.position.set(1.05, body.position.y - 0.1, 0); tr.rotation.z = 0.7; grp.add(tr); for (const s of [0.32, -0.32]) { const ear = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.34), bodyMat); ear.position.set(-0.1, 0.1, s); head.add(ear); } }
+    // tail (swings)
+    let tail = null;
+    if (type !== "croc") { tail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.07, 0.07), bodyMat); tail.geometry.translate(-0.25, 0, 0); tail.position.set(-(type === "elephant" ? 0.7 : 0.6), body.position.y + 0.05, 0); grp.add(tail); }
+    else { tail = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.18, 0.22), bodyMat); tail.geometry.translate(-0.35, 0, 0); tail.position.set(-0.8, 0.3, 0); grp.add(tail); }
+    return { grp, legs, head, tail, type, t: Math.random(), sp: 0.04 + Math.random() * 0.04, phase: Math.random() * TAU };
   }
 
   // ---------- fx ----------
@@ -694,7 +728,8 @@ export class Renderer {
     if (this.shown > real) this.shown = real;                              // layer reset / rollback
     if (real - this.shown > Math.max(3, cells.length * 0.3)) this.shown = real - Math.ceil(cells.length * 0.12); // catch up if workers lag
 
-    const target = state.complete ? 7 : Math.max(4, Math.min(18, Math.round((stats.builders || 3) + 1)));
+    // show as many workers as you actually have (0 when you have none), capped for perf
+    const target = state.complete ? 8 : Math.min(40, Math.max(0, Math.round(stats.builders || 0)));
     while (this.workers.length < target) { const w = this._makeWorker(); this.workerGroup.add(w.grp); this.workers.push(w); }
     while (this.workers.length > target) { const w = this.workers.pop(); this.workerGroup.remove(w.grp); }
 
@@ -736,9 +771,14 @@ export class Renderer {
       w.grp.rotation.y = (w.state === "haul" || w.state === "place") ? Math.atan2(0 - px, this._topW.z - pz) : Math.atan2(px - 0, pz - this._topW.z);
       const sw = Math.sin(w.phase * 8) * (walk ? 0.7 * walk + 0.15 : 0.05);
       w.legL.rotation.x = sw; w.legR.rotation.x = -sw;
-      w.armL.rotation.x = carry ? -2.2 : -sw; w.armR.rotation.x = carry ? -2.2 : sw;
-      w.body.rotation.x = bend * 0.9; w.block.visible = carry;
-      w.grp.position.y += bend * -0.15 + Math.sin(w.phase * 8) * 0.025 * walk;   // gait bob
+      const tAL = carry ? -2.2 : -sw, tAR = carry ? -2.2 : sw;
+      w.aL += (tAL - w.aL) * 0.25; w.aR += (tAR - w.aR) * 0.25;     // springy arm follow-through
+      w.armL.rotation.x = w.aL; w.armR.rotation.x = w.aR;
+      w.body.rotation.x = bend * 0.9;
+      w.body.scale.y = 1 + Math.sin(w.breathe + w.phase * 2.4) * 0.045;            // breathing
+      w.head.rotation.x = bend * 0.5 + Math.sin(w.phase * 4) * 0.05 * (walk ? 1 : 0.3); // head bob
+      w.block.visible = carry;
+      w.grp.position.y += bend * -0.15 + Math.sin(w.phase * 8) * 0.025 * walk;     // gait bob
       if (w.whipT > 0) w.grp.position.y += Math.abs(Math.sin(w.phase * 20)) * 0.05;
 
       // project to screen for whip hit-testing
@@ -774,6 +814,8 @@ export class Renderer {
       a.grp.rotation.z = a.type === "croc" ? 0 : Math.sin(a.t * 40 + a.phase) * 0.03; // subtle body sway
       const sw = Math.sin((a.t * 40 + a.phase)) * 0.5;
       a.legs[0].rotation.x = sw; a.legs[3].rotation.x = sw; a.legs[1].rotation.x = -sw; a.legs[2].rotation.x = -sw;
+      if (a.tail) a.tail.rotation.y = Math.sin(a.t * 30 + a.phase) * (a.type === "croc" ? 0.5 : 0.35); // tail wag / swish
+      if (a.head) a.head.rotation.z = Math.sin(a.t * 20 + a.phase) * 0.06;                              // head bob
     }
   }
 
