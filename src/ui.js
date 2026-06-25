@@ -127,6 +127,9 @@ export class UI {
     // ---- center reward popup ----
     this.popupEl = el("div", "popup"); r.appendChild(this.popupEl);
 
+    // ---- floating +resource numbers (tap-to-harvest feedback) ----
+    this.floatLayer = el("div", "floatlayer"); r.appendChild(this.floatLayer);
+
     // ---- Pharaoh guide + quest panel ----
     this.questEl = el("div", "quest");
     this.questEl.innerHTML = `<div class="ph-portrait">${icon("pharaoh")}</div>
@@ -154,6 +157,15 @@ export class UI {
     this.popupEl.className = "popup " + (cls || "") + " show";
     clearTimeout(this._popupT);
     this._popupT = setTimeout(() => { this.popupEl.className = "popup " + (cls || ""); }, 1500);
+  }
+
+  // Clash-of-Clans style "+N 🪵" that floats up where a node was tapped.
+  floatGain(sx, sy, res, amount) {
+    const e = el("div", "floatgain", `<span class="ic">${icon(RES_META[res].icon)}</span>+${fmt(amount)}`);
+    e.style.left = sx + "px"; e.style.top = sy + "px";
+    e.style.setProperty("--c", RES_META[res].color);
+    this.floatLayer.appendChild(e);
+    setTimeout(() => e.remove(), 1000);
   }
 
   // ---- level bar ----

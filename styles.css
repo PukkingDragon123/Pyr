@@ -167,6 +167,15 @@ svg.ic{width:1.15em;height:1.15em;vertical-align:-.18em;flex:0 0 auto}
 .popup.go{color:#ff8a3a;text-shadow:0 3px 12px rgba(0,0,0,.6),0 0 26px rgba(255,120,60,.7)}
 @keyframes popreward{0%{opacity:0;transform:translate(-50%,-40%) scale(.5)}18%{opacity:1;transform:translate(-50%,-50%) scale(1.12)}30%{transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-66%) scale(1)}}
 
+/* floating +resource numbers on tap-to-harvest */
+/* #ui>.floatlayer specificity beats the #ui>* {pointer-events:auto} rule so it never blocks clicks */
+#ui>.floatlayer{position:absolute;inset:0;z-index:24;pointer-events:none;overflow:hidden}
+.floatgain{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:4px;
+  font-size:19px;font-weight:900;color:var(--c,#fff);white-space:nowrap;
+  text-shadow:0 2px 5px rgba(0,0,0,.65),0 0 3px rgba(0,0,0,.8);animation:floatgain 1s ease-out forwards}
+.floatgain .ic{width:18px;height:18px;display:inline-flex} .floatgain .ic svg{width:18px;height:18px}
+@keyframes floatgain{0%{opacity:0;transform:translate(-50%,-30%) scale(.6)}22%{opacity:1;transform:translate(-50%,-60%) scale(1.1)}100%{opacity:0;transform:translate(-50%,-150%) scale(1)}}
+
 /* ---------- tutorial ---------- */
 .tut{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);z-index:24;width:min(420px,calc(100vw - 28px));
   background:linear-gradient(180deg,var(--card2),#241a10);border:1px solid var(--gold);border-radius:18px;

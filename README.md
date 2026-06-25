@@ -1,11 +1,12 @@
 # 🔺 Build the Pyramid
 
-An **idle tycoon / incremental clicker** set in Ancient Egypt. You are the
-Pharaoh, and your pyramid is **never a progress bar** — it is physically built,
-**brick by brick**, in a warm low-poly isometric desert, with tiny **animated
-workers** hauling stone up the ramp and **oxen, elephants and crocodiles**
-roaming the construction site. Finish it, raise the golden capstone, then found
-a new dynasty and build a greater one.
+A **low-poly 3D city-builder** set in Ancient Egypt. You are the Pharaoh: pitch
+**worker camps** across a procedural desert, **tap the trees, stone, water and
+fields** to send your crews out gathering, and watch your pyramid rise — it is
+**never a progress bar**, but physically built **brick by brick** by animated
+workers hauling stone up the ramp, with **oxen, elephants and crocodiles**
+roaming the site. Finish it, raise the golden capstone, then found a new dynasty
+and build a greater one.
 
 Relaxing to play, on desktop, mobile (touch), or with a gamepad.
 
@@ -13,7 +14,7 @@ Relaxing to play, on desktop, mobile (touch), or with a gamepad.
 
 ## ▶ Play
 
-**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=6**
+**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=7**
 
 (Served straight from this branch via raw.githack.com — bump the `?v=` number to bust the cache after updates.)
 
@@ -22,20 +23,23 @@ crew, and the whip.
 
 ## How to play
 
-It's a simple, relaxing builder:
+It's a relaxing **city-builder** in the Clash-of-Clans spirit:
 
-- **Build producers** — quarries, mines, farms and wells. Each one appears in
-  the desert and produces its resource (Cookie-Clicker style).
+- **Build worker camps** — quarries, lumber, farms, wells and mines all appear
+  as little tented **camps** on the map. Each camp sends gatherers out to the
+  resource nodes nearby and steadily stockpiles its resource.
+- **Tap the map to harvest** — the desert is dotted with **trees, stone, ore,
+  crops and water**. Tap a node to send your crews and **collect a burst** of
+  that resource (chips fly, a `+N` floats up). Tapped nodes regrow.
 - **Hire laborers** — every laborer is a worker who **actually walks a block up
   the ramp and sets it in place** (no teleporting bricks). More laborers and
   faster machines (sleds, cranes, ramps) = a faster build.
-- **Click a worker to crack the whip** — they sprint and everyone builds faster
-  for a few seconds. (No button — just tap the workers on the site.)
-- **Limestone** is the building material; if you run short the game tells you to
-  build more quarries.
-- A real **desert world** grows around you: the **Nile** with docks and
-  crocodiles, a **worker village & camps**, farms by the river, and every
-  building you buy shown for real.
+- **Click a worker on the pyramid to crack the whip** — they sprint and everyone
+  builds faster for a few seconds.
+- **Limestone** is the building material; if you run short, build more quarries
+  (or tap the stone nodes).
+- A real **desert world** grows around you: the **Nile**, a **worker village &
+  camps**, fields by the river, oxen, elephants and crocodiles.
 - Finish every layer to raise the **golden capstone**, then **found a New
   Dynasty** to keep your Legacy and build the next, greater wonder.
 
@@ -44,7 +48,8 @@ Step → Bent → Great → Golden → Black Obsidian → Floating Divine → an
 forever, each bigger than the last.
 
 ### Controls
-- **Tap / click a worker** — crack the whip. **Drag** to pan, **scroll / pinch** to zoom.
+- **Tap a resource node** — harvest a burst. **Tap a worker on the pyramid** —
+  crack the whip. **Drag** to pan, **scroll / pinch** to zoom.
 - **Space / Enter** — whip. **M** — mute. **+ / −** — zoom. **Esc** — close dialogs.
 - **Gamepad** — A button whips. Progress **auto-saves** and continues **while you're away**.
 
@@ -96,10 +101,15 @@ tools/              # make_card_art.py (deploy art), test_sim.mjs, smoke.mjs, cl
   variation so it reads as hand-laid stone, not a slab); cubes are only revealed
   as workers actually deliver and set them — no teleporting bricks. The golden
   capstone drops in on completion.
+- **Procedural resource map** — trees, stone, ore, crops and water nodes are
+  placed deterministically from the dynasty seed (its own RNG stream, so saves
+  stay stable). Resource buildings render as **worker camps** whose gatherers
+  walk camp↔node, harvest and carry resources back; tapping a node screen-picks
+  it and pops a burst with flying chips.
 - **Animated crews & animals** are procedural low-poly models: workers walk the
   ramp, bend to place a block and walk back; oxen, elephants and crocodiles
   roam smooth looped paths (no path-finding, so nothing ever gets stuck) with
-  gait bounce. Dust puffs and ground rings are pooled `Sprite`s.
+  gait bounce. Dust puffs, chips and ground rings are pooled.
 - **Performance:** instanced pyramid (one draw call), pooled FX, pixel-ratio
   capped at 1.5. Fixed-timestep sim with a seeded RNG; logic fully separate from
   rendering, so the simulation is deterministic and testable headless.

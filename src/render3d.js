@@ -3,7 +3,7 @@
 // the ramp (no teleport), animals on smooth looped paths. Same interface as the
 // old Canvas2D renderer so main.js is unchanged except the import.
 import * as THREE from "../vendor/three.module.js";
-import { wonderFor, wonderGeom, BUILDINGS } from "./data.js";
+import { wonderFor, wonderGeom, BUILDINGS, genNodes } from "./data.js";
 import { layerCells } from "./iso.js";
 
 export const DAY_LEN = 240;
@@ -30,6 +30,8 @@ function skyAt(phase) {
 
 const SKINS = [0xcaa06a, 0xb5895a, 0x9a6f44, 0xd8b483];
 const CLOTHS = [0x3a6ea5, 0xc0392b, 0xd4a017, 0x2c8c84];
+// resource → chip/carry colour for gathering VFX
+const NODE_COL = { wood: 0x8a5e34, limestone: 0xe7d6ad, food: 0xd9b24a, water: 0x49b5d6, granite: 0x9a7a8e, copper: 0xe08a4e };
 
 export class Renderer {
   constructor(canvas) {
@@ -70,7 +72,7 @@ export class Renderer {
     scene.add(this.sun); scene.add(this.sun.target);
 
     // ground (big desert plane) + soft construction platform
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ color: 0xdcb878, roughness: 1 }));
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ map: this._tileTex(), color: 0xffffff, roughness: 1 }));
     ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
     // Nile river (flat water on one side)
     const nile = new THREE.Mesh(new THREE.PlaneGeometry(220, 26), new THREE.MeshStandardMaterial({ color: 0x2f7fa0, roughness: 0.3, metalness: 0.1 }));
@@ -78,16 +80,32 @@ export class Renderer {
 
     // groups
     this.worldGroup = new THREE.Group(); scene.add(this.worldGroup); // buildings/props (rebuilt per wonder layout)
+    this.nodeGroup = new THREE.Group(); scene.add(this.nodeGroup);   // procedural resource map (trees/rocks/...)
     this.workerGroup = new THREE.Group(); scene.add(this.workerGroup);
+    this.gathererGroup = new THREE.Group(); scene.add(this.gathererGroup);
     this.animalGroup = new THREE.Group(); scene.add(this.animalGroup);
     this.fxGroup = new THREE.Group(); scene.add(this.fxGroup);
 
     // shared resources
     this.cubeGeo = new THREE.BoxGeometry(0.97, 1, 0.97);
-    this.workers = []; this.animals = []; this.puffs = []; this.rings = [];
+    this.workers = []; this.animals = []; this.puffs = []; this.rings = []; this.chips = [];
+    this.gatherers = []; this.nodes = []; this.nodeHits = []; this._nodeKey = "";
     this._dustTex = this._softTex();
     this._wonderBuilt = -1; this._layoutWonder = -1;
-    this._tmpV = new THREE.Vector3();
+    this._tmpV = new THREE.Vector3(); this._tmpV2 = new THREE.Vector3();
+  }
+
+  // low-contrast 2-tone sand tiles → a Clash-of-Clans style grid underfoot
+  _tileTex() {
+    const c = document.createElement("canvas"); c.width = c.height = 64;
+    const g = c.getContext("2d");
+    g.fillStyle = "#dcb878"; g.fillRect(0, 0, 64, 64);
+    g.fillStyle = "#d3ad6b"; g.fillRect(0, 0, 32, 32); g.fillRect(32, 32, 32, 32);
+    g.strokeStyle = "rgba(120,92,52,0.16)"; g.lineWidth = 2; g.strokeRect(1, 1, 62, 62);
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(85, 85);
+    t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    return t;
   }
 
   _softTex() {
@@ -165,6 +183,24 @@ export class Renderer {
     return grp;
   }
 
+  // Resource buildings render as worker camps: a tent, crates and a worked pile.
+  _campModel(id) {
+    const grp = new THREE.Group();
+    const tentCol = { quarry: 0xe6dcc6, lumber_camp: 0xb8915a, farm: 0xcfd7a0, well: 0xbcd3df, granite_mine: 0xd8c3cc, copper_mine: 0xd9c2a6 }[id] || 0xcdb892;
+    const tent = new THREE.Mesh(new THREE.ConeGeometry(0.92, 1.0, 4), this._mat(tentCol));
+    tent.position.set(-0.5, 0.5, -0.45); tent.rotation.y = Math.PI / 4; tent.castShadow = true; grp.add(tent);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.25, 5), this._mat(0x7c5530)); pole.position.set(-0.5, 0.62, -0.45); grp.add(pole);
+    const flag = this._box(0.26, 0.16, 0.02, 0xc0392b, 0); flag.position.set(-0.37, 1.05, -0.45); grp.add(flag);
+    const crate = this._box(0.4, 0.4, 0.4, 0xb98e54, 0.2); crate.position.set(0.55, 0.2, -0.55); grp.add(crate);
+    if (id === "quarry") { for (let i = 0; i < 3; i++) { const b = this._box(0.4, 0.4, 0.4, 0xe7d6ad, 0); b.position.set(0.15 + (i % 2) * 0.48, 0.2 + (i > 1 ? 0.4 : 0), 0.5); grp.add(b); } }
+    else if (id === "lumber_camp") { for (let i = 0; i < 3; i++) { const log = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.95, 6), this._mat(0x8a5e34)); log.rotation.z = Math.PI / 2; log.position.set(0.4, 0.17 + i * 0.25, 0.5); log.castShadow = true; grp.add(log); } }
+    else if (id === "farm") { const fld = this._box(1.5, 0.1, 1.0, 0x6f9a3a, 0.05); fld.position.set(0.3, 0, 0.4); grp.add(fld); for (let i = -1; i <= 1; i++) { const s = this._box(0.08, 0.42, 0.08, 0xd9b24a, 0); s.position.set(0.3 + i * 0.42, 0.26, 0.4); grp.add(s); } }
+    else if (id === "well") { const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.42, 0.45, 10), this._mat(0xcdbb95)); ring.position.set(0.42, 0.22, 0.45); ring.castShadow = true; grp.add(ring); const w = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.42, 10), this._mat(0x2a3b55)); w.position.set(0.42, 0.5, 0.45); grp.add(w); }
+    else if (id === "granite_mine") { const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.5, 0), this._mat(0x9a7a8e)); m.position.set(0.42, 0.4, 0.45); m.castShadow = true; grp.add(m); }
+    else if (id === "copper_mine") { const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.5, 0), this._mat(0x8a7458)); m.position.set(0.42, 0.4, 0.45); m.castShadow = true; grp.add(m); const o = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.22, 5), this._mat(0x3fae9a)); o.position.set(0.42, 0.72, 0.45); grp.add(o); }
+    return grp;
+  }
+
   _zoneAnchor(zone, B) {
     const c = (B - 1) / 2;
     const Z = {
@@ -189,7 +225,8 @@ export class Renderer {
       let arr = this.buildingSlots[b.id]; if (!arr) arr = this.buildingSlots[b.id] = [];
       while (arr.length < want) {
         const i = arr.length, col = i % z[2], row = Math.floor(i / z[2]);
-        const mdl = this._buildingModel(b.zone === "nile" ? "house" : b.id === "granary" ? "granary" : b.cat === "machine" ? "ramp" : b.zone === "village" ? "house" : b.zone);
+        const mdl = b.cat === "resource" ? this._campModel(b.id)
+          : this._buildingModel(b.zone === "nile" ? "house" : b.id === "granary" ? "granary" : b.cat === "machine" ? "ramp" : b.zone === "village" ? "house" : b.zone);
         mdl.position.set((z[0] + col * 1.7) - off, 0, (z[1] + row * 1.7) - off);
         mdl.rotation.y = (i * 1.3) % TAU * 0.1;
         this.worldGroup.add(mdl); arr.push(mdl);
@@ -199,6 +236,142 @@ export class Renderer {
     // camps near ramp
     if (!this._camps) { this._camps = []; for (let i = 0; i < 5; i++) { const t = this._buildingModel("camp"); t.position.set((B * 0.5 - 2 + i) - off, 0, (B + 3) - off); this.worldGroup.add(t); this._camps.push(t); } }
   }
+
+  // ---------- procedural resource map (nodes you tap to harvest) ----------
+  _nodeModel(t) {
+    const grp = new THREE.Group();
+    if (t === "tree") {
+      const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 0.9, 6), this._mat(0x7c5530)); tr.position.y = 0.45; tr.castShadow = true; grp.add(tr);
+      const f1 = new THREE.Mesh(new THREE.IcosahedronGeometry(0.6, 0), this._mat(0x4f8a3a)); f1.position.y = 1.05; f1.castShadow = true; grp.add(f1);
+      const f2 = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 0), this._mat(0x5f9a44)); f2.position.y = 1.5; f2.castShadow = true; grp.add(f2);
+      grp._harvest = [f1, f2];
+    } else if (t === "rock") {
+      const a = new THREE.Mesh(new THREE.DodecahedronGeometry(0.5, 0), this._mat(0xdac7a0)); a.position.y = 0.4; a.castShadow = true; grp.add(a);
+      const b = new THREE.Mesh(new THREE.DodecahedronGeometry(0.32, 0), this._mat(0xc9b487)); b.position.set(0.5, 0.26, 0.18); b.castShadow = true; grp.add(b);
+      grp._harvest = [a, b];
+    } else if (t === "crop") {
+      const soil = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.12, 1.1), this._mat(0x6b4a2c)); soil.position.y = 0.06; soil.receiveShadow = true; grp.add(soil);
+      const blades = []; for (let i = 0; i < 5; i++) { const bl = this._box(0.1, 0.5, 0.1, i % 2 ? 0x9bbf3e : 0xd9b24a, 0); bl.position.set((i - 2) * 0.22, 0.25, (i % 2) * 0.2 - 0.1); blades.push(bl); grp.add(bl); }
+      grp._harvest = blades;
+    } else if (t === "water") {
+      const disc = new THREE.Mesh(new THREE.CircleGeometry(0.8, 16), new THREE.MeshStandardMaterial({ color: 0x49b5d6, roughness: 0.25, metalness: 0.1 })); disc.rotation.x = -Math.PI / 2; disc.position.y = 0.09; grp.add(disc);
+      const reeds = []; for (let i = 0; i < 4; i++) { const r = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.7, 4), this._mat(0x4f8a3a)); const a = i / 4 * TAU; r.position.set(Math.cos(a) * 0.5, 0.35, Math.sin(a) * 0.5); r.castShadow = true; reeds.push(r); grp.add(r); }
+      grp._harvest = reeds;
+    } else if (t === "granite") {
+      const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.55, 0), this._mat(0x9a7a8e)); m.position.y = 0.45; m.castShadow = true; grp.add(m); grp._harvest = [m];
+    } else { // copper
+      const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.52, 0), this._mat(0x8a7458)); m.position.y = 0.42; m.castShadow = true; grp.add(m);
+      const o = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.26, 5), this._mat(0x3fae9a)); o.position.y = 0.72; grp.add(o); grp._harvest = [m, o];
+    }
+    return grp;
+  }
+
+  _buildNodes(state) {
+    const g = wonderGeom(state.wonderIndex);
+    const key = (state.seed >>> 0) + "/" + state.wonderIndex;
+    if (this._nodeKey === key && this.nodes.length) return;
+    this._nodeKey = key;
+    while (this.nodeGroup.children.length) this.nodeGroup.remove(this.nodeGroup.children[0]);
+    this.nodes = [];
+    for (const nd of genNodes(state.seed >>> 0, g.base)) {
+      const grp = this._nodeModel(nd.t);
+      grp.position.set(nd.x, 0, nd.z); grp.rotation.y = nd.rot; grp.scale.setScalar(nd.s);
+      this.nodeGroup.add(grp);
+      this.nodes.push({ grp, t: nd.t, res: nd.res, x: nd.x, z: nd.z, charge: 1, bounce: 0, harvest: grp._harvest || [] });
+    }
+  }
+
+  _updateNodes(dt) {
+    const REGEN = 9;
+    this.nodeHits = [];
+    for (const n of this.nodes) {
+      if (n.charge < 1) n.charge = Math.min(1, n.charge + dt / REGEN);
+      if (n.bounce > 0) n.bounce -= dt;
+      const grow = 0.35 + 0.65 * n.charge;
+      for (const h of n.harvest) h.scale.setScalar(grow);
+      n.grp.position.y = n.bounce > 0 ? Math.sin(n.bounce * 26) * 0.1 * n.bounce : 0;
+      this._tmpV.set(n.x, 0.6, n.z).project(this.cam);
+      if (this._tmpV.z < 1) this.nodeHits.push({ x: (this._tmpV.x * 0.5 + 0.5) * this.vw, y: (-this._tmpV.y * 0.5 + 0.5) * this.vh, n });
+    }
+  }
+
+  // tap → harvest the nearest charged node under the pointer (returns it, or null)
+  harvestAt(sx, sy) {
+    let best = null, bd = 72 * 72;
+    for (const h of this.nodeHits) { const d = (h.x - sx) ** 2 + (h.y - sy) ** 2; if (d < bd && h.n.charge > 0.5) { bd = d; best = h; } }
+    if (!best) return null;
+    const n = best.n, charge = n.charge, col = NODE_COL[n.res] || 0xffffff;
+    n.charge = 0.06; n.bounce = 0.5;
+    this.spawnChips(new THREE.Vector3(n.x, 0.6, n.z), col, 11);
+    this.ring(new THREE.Vector3(n.x, 0.05, n.z), col);
+    this._rallyGatherers(n);
+    this.kick(0.12);
+    return { res: n.res, charge, sx: best.x, sy: best.y };
+  }
+
+  // ---------- gatherers (walk camp ↔ node, harvest, carry back) ----------
+  _campPos(res, B, off) {
+    const zone = { wood: "lumber", limestone: "quarry", food: "farm", water: "well", granite: "granite", copper: "copper" }[res] || "village";
+    const z = this._zoneAnchor(zone, B) || [0, 0, 1, 0];
+    return new THREE.Vector3(z[0] - off + 0.7, 0, z[1] - off + 0.7);
+  }
+  _nearestNode(res, from) {
+    let best = null, bd = 1e9;
+    for (const n of this.nodes) { if (n.res !== res) continue; const d = (n.x - from.x) ** 2 + (n.z - from.z) ** 2; if (d < bd) { bd = d; best = n; } }
+    return best;
+  }
+  _makeGatherer(res) {
+    const w = this._makeWorker();
+    w.grp.scale.setScalar(0.72);
+    if (w.block) w.block.material.color.setHex(NODE_COL[res] || 0xcfcfcf);
+    w.res = res; w.gstate = "toNode"; w.node = null; w.gtimer = 0; w.home = null;
+    return w;
+  }
+  _stepToward(cur, aim, step) {
+    const dx = aim.x - cur.x, dz = aim.z - cur.z, d = Math.hypot(dx, dz);
+    if (d <= Math.max(0.35, step)) return true;
+    cur.x += dx / d * step; cur.z += dz / d * step; return false;
+  }
+  _rallyGatherers(node) {
+    let k = 0;
+    for (const w of this.gatherers) if (w.res === node.res && w.gstate !== "harvest") { w.node = node; w.gstate = "toNode"; if (++k >= 3) break; }
+  }
+  _updateGatherers(state, stats, dt) {
+    const g = wonderGeom(state.wonderIndex), B = g.base, off = (B - 1) / 2;
+    const want = {};
+    for (const b of BUILDINGS) {
+      if (b.cat !== "resource" || !b.effect.produce) continue;
+      const res = Object.keys(b.effect.produce)[0], camps = state.buildings[b.id] || 0;
+      if (camps > 0 && this.nodes.some((n) => n.res === res)) want[res] = Math.min(3, 1 + Math.floor(camps / 3));
+    }
+    let sum = 0; for (const k in want) sum += want[k];
+    const CAP = 12; if (sum > CAP) for (const k in want) want[k] = Math.max(1, Math.round(want[k] * CAP / sum));
+    const have = {}; for (const w of this.gatherers) have[w.res] = (have[w.res] || 0) + 1;
+    for (const res in want) while ((have[res] || 0) < want[res]) { const w = this._makeGatherer(res); this.gathererGroup.add(w.grp); this.gatherers.push(w); have[res] = (have[res] || 0) + 1; }
+    for (const res in have) { let extra = have[res] - (want[res] || 0); for (let i = this.gatherers.length - 1; i >= 0 && extra > 0; i--) if (this.gatherers[i].res === res) { this.gathererGroup.remove(this.gatherers[i].grp); this.gatherers.splice(i, 1); extra--; } }
+
+    const whip = !!(state.whip && state.whip.boostT > 0);
+    const sp = (2.0 + Math.min(3, (stats.buildRate || 0) * 0.05)) * (whip ? 1.3 : 1) * dt;
+    for (const w of this.gatherers) {
+      w.phase += dt;
+      if (!w.home) w.home = this._campPos(w.res, B, off);
+      if (!w.node) w.node = this._nearestNode(w.res, w.home);
+      const np = w.node ? this._tmpV2.set(w.node.x, 0, w.node.z) : w.home;
+      let walk = 0, carry = false, chop = 0;
+      if (w.gstate === "toNode") { walk = 1; this._face(w, np); if (this._stepToward(w.grp.position, np, sp)) { w.gstate = "harvest"; w.gtimer = 1.0 + Math.random() * 0.7; } }
+      else if (w.gstate === "harvest") { chop = 1; w.gtimer -= dt; if (w.node && Math.random() < dt * 5) w.node.bounce = 0.22; if (w.gtimer <= 0) w.gstate = "toCamp"; }
+      else if (w.gstate === "toCamp") { walk = 1; carry = true; this._face(w, w.home); if (this._stepToward(w.grp.position, w.home, sp)) { w.gstate = "deposit"; w.gtimer = 0.4; } }
+      else { w.gtimer -= dt; if (w.gtimer <= 0) { w.gstate = "toNode"; w.node = this._nearestNode(w.res, w.home); } }
+      const swing = Math.sin(w.phase * 9) * (walk ? 0.8 : 0.05);
+      const bend = chop ? Math.abs(Math.sin(w.phase * 11)) * 0.6 : 0;
+      w.legL.rotation.x = swing; w.legR.rotation.x = -swing;
+      w.armL.rotation.x = carry ? -2.0 : chop ? -1.7 - bend : -swing;
+      w.armR.rotation.x = carry ? -2.0 : chop ? -1.7 - bend : swing;
+      w.body.rotation.x = chop ? 0.3 : 0;
+      w.block.visible = carry; w.grp.position.y = 0;
+    }
+  }
+  _face(w, aim) { w.grp.rotation.y = Math.atan2(aim.x - w.grp.position.x, aim.z - w.grp.position.z); }
 
   // ---------- worker model ----------
   _makeWorker() {
@@ -257,6 +430,18 @@ export class Renderer {
     if (!r) { const m = new THREE.Mesh(new THREE.RingGeometry(0.6, 0.9, 24), new THREE.MeshBasicMaterial({ color, transparent: true, side: THREE.DoubleSide, depthWrite: false })); m.rotation.x = -Math.PI / 2; this.fxGroup.add(m); r = { m }; this.rings.push(r); }
     r.m.material.color.set(color); r.m.visible = true; r.m.position.copy(pos); r.m.scale.setScalar(1); r.life = 1;
   }
+  // little resource cubes that pop out of a node on harvest
+  spawnChips(pos, color, n) {
+    if (!this._chipGeo) this._chipGeo = new THREE.BoxGeometry(0.13, 0.13, 0.13);
+    for (let i = 0; i < n; i++) {
+      let c = this.chips.find((x) => !x.m.visible);
+      if (!c) { if (this.chips.length > 44) break; const m = new THREE.Mesh(this._chipGeo, new THREE.MeshStandardMaterial({ flatShading: true })); m.castShadow = true; this.fxGroup.add(m); c = { m, v: new THREE.Vector3(), life: 0 }; this.chips.push(c); }
+      c.m.visible = true; c.m.material.color.setHex(color); c.m.position.copy(pos);
+      c.v.set((Math.random() - 0.5) * 4.5, 3 + Math.random() * 3.5, (Math.random() - 0.5) * 4.5);
+      c.life = 0.55 + Math.random() * 0.35; c.m.scale.setScalar(0.6 + Math.random() * 0.9);
+      c.m.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+    }
+  }
   celebrateLayer() { if (this._topW) { this.ring(this._topW, 0xffe39a); this.spawnDust(this._topW, 16); } this.kick(0.6); }
   kick(p) { this.shake = Math.min(1.4, this.shake + p); }
   whipAt(sx, sy) {
@@ -268,16 +453,16 @@ export class Renderer {
 
   _updateCamera(vw, vh, state) {
     const g = wonderGeom(state.wonderIndex);
-    const view = (g.base * 1.7) / this.zoom;
+    const view = (g.base * 1.95) / this.zoom;
     const aspect = vw / vh;
     this.cam.left = -view * aspect / 2; this.cam.right = view * aspect / 2; this.cam.top = view / 2; this.cam.bottom = -view / 2;
     this.cam.updateProjectionMatrix();
-    const tgt = this._tmpV.set(0, g.layers * 0.35, 2);
+    const tgt = this._tmpV.set(0, g.layers * 0.3, 1);
     const wpp = view / vh;
     tgt.x += -this.pan.x * wpp; tgt.z += this.pan.y * wpp * 0.6; tgt.y += this.pan.y * wpp * 0.4;
     let shx = 0, shy = 0; if (this.shake > 0.01) { shx = (Math.random() - 0.5) * this.shake; shy = (Math.random() - 0.5) * this.shake; this.shake *= 0.86; }
-    const dir = new THREE.Vector3(0.9, 1.0, 1.1).normalize();
-    this.cam.position.copy(tgt).addScaledVector(dir, 80).add(new THREE.Vector3(shx, 0, shy));
+    const dir = new THREE.Vector3(0.82, 1.2, 0.98).normalize();
+    this.cam.position.copy(tgt).addScaledVector(dir, 84).add(new THREE.Vector3(shx, 0, shy));
     this.cam.lookAt(tgt.x + shx, tgt.y, tgt.z + shy);
   }
 
@@ -285,6 +470,7 @@ export class Renderer {
     this._resize(vw, vh);
     this._buildPyramid(state);
     this._rebuildLayout(state);
+    this._buildNodes(state);
 
     // day/night sky + sun — start the world in bright mid-morning (+0.22 offset)
     const phase = ((state.clock + DAY_LEN * 0.22) % DAY_LEN) / DAY_LEN, sk = skyAt(phase);
@@ -296,6 +482,8 @@ export class Renderer {
     this._updateCamera(vw, vh, state);
     this._updatePyramid(state);
     this._updateWorkers(state, stats, dt);
+    this._updateGatherers(state, stats, dt);
+    this._updateNodes(dt);
     this._updateAnimals(state, stats, dt);
     this._updateFx(dt);
 
@@ -326,7 +514,7 @@ export class Renderer {
     if (this.shown > real) this.shown = real;                              // layer reset / rollback
     if (real - this.shown > Math.max(3, cells.length * 0.3)) this.shown = real - Math.ceil(cells.length * 0.12); // catch up if workers lag
 
-    const target = state.complete ? 8 : Math.max(5, Math.min(28, Math.round((stats.builders || 3) + 2)));
+    const target = state.complete ? 7 : Math.max(4, Math.min(18, Math.round((stats.builders || 3) + 1)));
     while (this.workers.length < target) { const w = this._makeWorker(); this.workerGroup.add(w.grp); this.workers.push(w); }
     while (this.workers.length > target) { const w = this.workers.pop(); this.workerGroup.remove(w.grp); }
 
@@ -412,5 +600,6 @@ export class Renderer {
   _updateFx(dt) {
     for (const p of this.puffs) { if (!p.sp.visible) continue; p.life -= dt; if (p.life <= 0) { p.sp.visible = false; continue; } p.sp.position.addScaledVector(p.v, dt); p.v.y -= 4 * dt; p.sp.material.opacity = Math.min(0.8, p.life); p.sp.scale.addScalar(dt * 0.8); }
     for (const r of this.rings) { if (!r.m.visible) continue; r.life -= dt * 1.4; if (r.life <= 0) { r.m.visible = false; continue; } r.m.scale.addScalar(dt * 10); r.m.material.opacity = Math.max(0, r.life) * 0.6; }
+    for (const c of this.chips) { if (!c.m.visible) continue; c.life -= dt; if (c.life <= 0) { c.m.visible = false; continue; } c.v.y -= 11 * dt; c.m.position.addScaledVector(c.v, dt); if (c.m.position.y < 0.06) { c.m.position.y = 0.06; c.v.y *= -0.4; c.v.x *= 0.6; c.v.z *= 0.6; } c.m.rotation.x += dt * 6; c.m.rotation.y += dt * 5; }
   }
 }

@@ -4,7 +4,7 @@ import {
   RES, BUILDINGS, WORKERS, BLESSINGS, WEATHER,
   LIMESTONE_PER_BLOCK, PER_BUILDER, wonderGeom, blocksForLayer, wonderFor,
   FIRST_WONDER_TOTAL, BASE_CAPS, OFFLINE_CAP_S, OFFLINE_RATE,
-  UNLOCK_LEVEL, levelForXp, questFor,
+  UNLOCK_LEVEL, levelForXp, questFor, HARVEST_BASE,
 } from "./data.js";
 import {
   costFor, canAfford, spend, capsFor, clampResources, resolveQty,
@@ -124,6 +124,23 @@ export function whip(s) {
   if (!s._fx) s._fx = [];
   s._fx.push({ type: "whip" });
   return true;
+}
+
+// Tap a resource node on the map to harvest a burst. The amount is a flat base
+// plus a few seconds of current production for that resource (so taps stay
+// meaningful early and scale late), reduced if the node is partly depleted, and
+// clamped so it never overfills the stockpile cap.
+export function harvestNode(s, res, charge) {
+  if (!RES.includes(res)) return { res, amount: 0 };
+  const st = s._stats || computeStats(s);
+  const room = Math.max(0, (st.caps[res] || Infinity) - (s.res[res] || 0));
+  const base = HARVEST_BASE[res] || 12;
+  let amount = (base + (st.prod[res] || 0) * 6) * (0.55 + 0.45 * Math.max(0, Math.min(1, charge == null ? 1 : charge)));
+  amount = Math.round(Math.min(amount, room));
+  if (amount <= 0) return { res, amount: 0 };
+  s.res[res] = (s.res[res] || 0) + amount;
+  s.stats.taps = (s.stats.taps || 0) + 1;
+  return { res, amount };
 }
 
 export function getLevel(s) { return levelForXp(s.stats.totalBlocksAllTime); }

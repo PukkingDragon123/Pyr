@@ -4,7 +4,7 @@ import { STR } from "../strings.js";
 import { BUILDINGS, WORKERS, BLESSINGS, AUTOSAVE_MS, wonderFor } from "./data.js";
 import {
   step, computeStats, buyBuilding, buyWorker, buyBlessing,
-  doPrestige, legacyGain, isUnlocked, freshlyUnlocked, simulateOffline, whip,
+  doPrestige, legacyGain, isUnlocked, freshlyUnlocked, simulateOffline, whip, harvestNode,
 } from "./sim.js";
 import { load, save, wipe, exportSave, importSave } from "./save.js";
 import { newGame } from "./state.js";
@@ -61,6 +61,18 @@ const app = {
     }
   },
   whip: (x, y) => { ensureAudio(); whip(state); renderer.whipAt(x, y); ui.popup(STR.whipGo, "go"); },
+  // A tap on the world: harvest a resource node if one is under the pointer,
+  // otherwise crack the whip to speed the build.
+  tap: (x, y) => {
+    ensureAudio();
+    const hit = renderer.harvestAt(x, y);
+    if (hit) {
+      const g = harvestNode(state, hit.res, hit.charge);
+      if (g && g.amount > 0) { ui.floatGain(hit.sx, hit.sy, g.res, g.amount); audio.play("buy"); }
+      return;
+    }
+    whip(state); renderer.whipAt(x, y); ui.popup(STR.whipGo, "go");
+  },
   toggleMute: (m) => { state.settings.muted = m; audio.setMuted(m); },
   toggleMusic: (on) => { state.settings.music = on; audio.setMusic(on); },
   saveNow: () => save(state),
@@ -119,7 +131,7 @@ function endPointer(e) {
   pointers.delete(e.pointerId);
   if (!had) return;
   if (pointers.size === 0 && downPos && moved < 8 && performance.now() - downPos.t < 600) {
-    app.whip(downPos.x, downPos.y);
+    app.tap(downPos.x, downPos.y);
   }
   downPos = pointers.size ? downPos : null;
 }

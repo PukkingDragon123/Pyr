@@ -3,6 +3,7 @@
 // Simple model: buildings PRODUCE resources; workers BUILD (haul blocks);
 // machines make building faster. No upkeep, no disasters — clean idle progression.
 // ============================================================================
+import { makeRng } from "./rng.js";
 
 export const RES = ["limestone", "granite", "wood", "copper", "food", "water"];
 
@@ -21,6 +22,40 @@ export const BASE_CAPS = {
 
 export const LIMESTONE_PER_BLOCK = 5; // reduced by Master Masons
 export const PER_BUILDER = 0.5;        // blocks/sec per builder before multipliers
+
+// ----------------------------------------------------------------------------
+// Procedural resource map. Worker camps send gatherers to these nodes, and the
+// player can tap a node to harvest a burst (Clash-of-Clans style). Positions are
+// deterministic from the dynasty seed so the world is stable across reloads.
+// Each cluster sits in the same neighbourhood as the camp that works it.
+// ----------------------------------------------------------------------------
+export const HARVEST_BASE = { limestone: 28, wood: 16, food: 16, water: 16, granite: 7, copper: 7 };
+const NODE_CLUSTERS = [
+  { t: "tree",    res: "wood",      n: 7, cx: (B) => -B / 2 - 12, cz: 5,   rx: 7,  rz: 10 },
+  { t: "rock",    res: "limestone", n: 8, cx: (B) =>  B / 2 + 11, cz: 0,   rx: 6,  rz: 11 },
+  { t: "crop",    res: "food",      n: 6, cx: (B) => -B / 2 - 5,  cz: -13, rx: 9,  rz: 4 },
+  { t: "water",   res: "water",     n: 5, cx: () => 0,            cz: -22, rx: 20, rz: 3 },
+  { t: "granite", res: "granite",   n: 3, cx: (B) =>  B / 2 + 16, cz: 10,  rx: 4,  rz: 5 },
+  { t: "copper",  res: "copper",    n: 3, cx: (B) =>  B / 2 + 16, cz: -11, rx: 4,  rz: 5 },
+];
+// Deterministic node list for a given seed + pyramid base. Pure (own RNG stream).
+export function genNodes(seed, base) {
+  const rng = makeRng(((seed >>> 0) ^ 0x9e3779b9 ^ (base * 0x85ebca6b)) >>> 0);
+  const nodes = [];
+  for (const c of NODE_CLUSTERS) {
+    const cx = c.cx(base);
+    for (let i = 0; i < c.n; i++) {
+      nodes.push({
+        t: c.t, res: c.res,
+        x: cx + (rng() * 2 - 1) * c.rx,
+        z: c.cz + (rng() * 2 - 1) * c.rz,
+        s: 0.7 + rng() * 0.7,
+        rot: rng() * Math.PI * 2,
+      });
+    }
+  }
+  return nodes;
+}
 
 // ----------------------------------------------------------------------------
 // Buildings. cat: resource | machine | city.  zone = where it appears in the world.

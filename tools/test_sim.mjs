@@ -2,9 +2,9 @@
 import { newGame, costFor, capsFor } from "../src/state.js";
 import {
   step, computeStats, buyBuilding, buyWorker, buyBlessing,
-  doPrestige, legacyGain, simulateOffline, isUnlocked, whip,
+  doPrestige, legacyGain, simulateOffline, isUnlocked, whip, harvestNode,
 } from "../src/sim.js";
-import { wonderGeom, blocksForLayer, wonderFor, FIRST_WONDER_TOTAL, BUILDINGS, WORKERS } from "../src/data.js";
+import { wonderGeom, blocksForLayer, wonderFor, FIRST_WONDER_TOTAL, BUILDINGS, WORKERS, genNodes } from "../src/data.js";
 import { fmt, fmtTime } from "../src/format.js";
 import { pyramidBounds } from "../src/iso.js";
 
@@ -35,6 +35,16 @@ ok(finite(st.prod) && finite(st.caps), "prod & caps finite");
 const base = computeStats(s).buildRate;
 whip(s);
 ok(computeStats(s).buildRate > base * 1.5, "whip boosts build rate: " + fmt(base) + " -> " + fmt(computeStats(s).buildRate));
+
+// procedural resource map + tap-to-harvest
+const nodes = genNodes(12345, wonderGeom(0).base);
+ok(nodes.length > 10 && nodes.every((n) => Number.isFinite(n.x) && Number.isFinite(n.z) && n.res), "genNodes returns a finite node map: " + nodes.length);
+ok(JSON.stringify(genNodes(12345, wonderGeom(0).base)) === JSON.stringify(nodes), "genNodes deterministic for a seed");
+const sh = newGame();
+const woodBefore = sh.res.wood, got = harvestNode(sh, "wood", 1);
+ok(got.amount > 0 && Math.abs(sh.res.wood - (woodBefore + got.amount)) < 1e-6, "harvestNode grants resource: +" + got.amount + " wood");
+sh.res.granite = capsFor(sh).granite; // already at cap → harvest must not overfill
+ok(harvestNode(sh, "granite", 1).amount === 0 && sh.res.granite <= capsFor(sh).granite + 1, "harvestNode respects cap (no overfill)");
 
 // cost scaling
 const c1 = costFor(BUILDINGS[0], 0, 1), c10 = costFor(BUILDINGS[0], 0, 10);
