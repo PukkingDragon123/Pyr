@@ -14,7 +14,7 @@ Relaxing to play, on desktop, mobile (touch), or with a gamepad.
 
 ## ▶ Play
 
-**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=10**
+**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=11**
 
 (Served straight from this branch via raw.githack.com — bump the `?v=` number to bust the cache after updates.)
 
@@ -24,7 +24,7 @@ crew, and the whip.
 ## How to play
 
 It's a relaxing **tile-grid city-builder** in the Clash-of-Clans spirit, with a
-chunky **pixel / Minecraft** UI:
+polished, colourful mobile-game UI:
 
 - **Start from an empty plot** — nothing is prebuilt. You begin with a little
   stone and grain and raise *everything* yourself.
@@ -117,9 +117,10 @@ tools/              # make_card_art.py (deploy art), test_sim.mjs, smoke.mjs, cl
   city buildings are placed (and validated for adjacency) on the grid. The
   economy keeps building *counts* authoritative, so placement is a layer over
   the same tested simulation.
-- **Pixel / Minecraft UI** — the HUD is reskinned into carved-sandstone blocks:
-  zero-radius panels with a stone outline and hard (blur-free) shadows, beveled
-  Minecraft-style buttons, monospace caps. Pure CSS over the same DOM.
+- **Polished Clash-of-Clans UI** — warm glossy rounded panels with soft layered
+  depth shadows, juicy gradient buttons with a springy press, bright coin-style
+  resource counters, a clean rounded build-sheet, and vibrant cinematic lighting
+  with scattered palms and greenery. Pure CSS + Three.js over the same DOM/scene.
 - **Procedural resource map** — trees, stone, ore, crops and water nodes are
   placed deterministically from the dynasty seed (its own RNG stream, so saves
   stay stable). Resource buildings render as **worker camps** whose gatherers

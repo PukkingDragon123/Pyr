@@ -48,7 +48,7 @@ export class Renderer {
     const r = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
     r.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5));
     r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
-    r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.1;
+    r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.2;
     r.outputColorSpace = THREE.SRGBColorSpace;
     this.r = r;
 
@@ -80,11 +80,12 @@ export class Renderer {
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ map: this._tileTex(), color: 0xffffff, roughness: 1 }));
     ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
     // Nile river (flat water on one side)
-    const nile = new THREE.Mesh(new THREE.PlaneGeometry(220, 26), new THREE.MeshStandardMaterial({ color: 0x2f7fa0, roughness: 0.3, metalness: 0.1 }));
+    const nile = new THREE.Mesh(new THREE.PlaneGeometry(220, 26), new THREE.MeshStandardMaterial({ color: 0x3aa6dd, roughness: 0.18, metalness: 0.2 }));
     nile.rotation.x = -Math.PI / 2; nile.position.set(0, 0.05, -34); scene.add(nile); this.nile = nile;
 
     // groups
     this.gridGroup = new THREE.Group(); scene.add(this.gridGroup);   // buildable tile lattice
+    this.decorGroup = new THREE.Group(); scene.add(this.decorGroup); // scattered palms / grass / rocks
     this.worldGroup = new THREE.Group(); scene.add(this.worldGroup); // tile-placed buildings
     this.nodeGroup = new THREE.Group(); scene.add(this.nodeGroup);   // procedural resource map (trees/rocks/...)
     this.supplyGroup = new THREE.Group(); scene.add(this.supplyGroup); // sleds + stone-cutting yard
@@ -100,7 +101,7 @@ export class Renderer {
     this.sleds = []; this.cutter = null; this._supplyKey = ""; this._vZoom = 1;
     // tile-grid placement
     this.tileModels = {}; this.machineSlots = {}; this.plops = [];
-    this._gridKey = ""; this._buildSet = new Set(); this._occupied = new Set(); this._nodeTiles = new Set();
+    this._gridKey = ""; this._decorKey = ""; this._buildSet = new Set(); this._occupied = new Set(); this._nodeTiles = new Set();
     this._ray = new THREE.Raycaster(); this._groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     const hi = new THREE.Mesh(new THREE.PlaneGeometry(TILE * 0.96, TILE * 0.96), new THREE.MeshBasicMaterial({ color: 0x6fe06f, transparent: true, opacity: 0.42, depthWrite: false }));
     hi.rotation.x = -Math.PI / 2; hi.position.y = 0.05; hi.visible = false; scene.add(hi); this.tileHi = hi;
@@ -283,8 +284,31 @@ export class Renderer {
     const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
     this.gridGroup.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x70593a, transparent: true, opacity: 0.3 })));
   }
+  // ---- scattered greenery / rocks to make the world lush & polished ----
+  _palm() {
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.17, 2.0, 6), this._mat(0x8a5e34)); trunk.position.y = 1.0; trunk.rotation.z = (Math.random() - 0.5) * 0.3; trunk.castShadow = true; g.add(trunk);
+    for (let i = 0; i < 6; i++) { const fr = new THREE.Mesh(new THREE.ConeGeometry(0.2, 1.15, 4), this._mat(i % 2 ? 0x5cb84a : 0x4a9e38)); const a = i / 6 * TAU; fr.position.set(Math.cos(a) * 0.45, 2.0, Math.sin(a) * 0.45); fr.rotation.order = "ZYX"; fr.rotation.y = a; fr.rotation.z = Math.PI / 2 - 0.55; fr.scale.set(1, 1, 0.42); fr.castShadow = true; g.add(fr); }
+    const co = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16, 0), this._mat(0x6b4a2c)); co.position.y = 1.95; g.add(co);
+    return g;
+  }
+  _grass() { const g = new THREE.Group(); for (let i = 0; i < 4; i++) { const b = this._box(0.07, 0.4 + Math.random() * 0.25, 0.07, i % 2 ? 0x7ab93f : 0x6aa634, 0); b.position.set((Math.random() - 0.5) * 0.45, 0.22, (Math.random() - 0.5) * 0.45); b.rotation.z = (Math.random() - 0.5) * 0.4; g.add(b); } return g; }
+  _rockDecor() { const g = new THREE.Group(); const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.4 + Math.random() * 0.3, 0), this._mat(0xc6b083)); m.position.y = 0.28; m.castShadow = true; g.add(m); return g; }
+  _buildDecor(state) {
+    const key = state.wonderIndex + ""; if (this._decorKey === key) return; this._decorKey = key;
+    while (this.decorGroup.children.length) this.decorGroup.remove(this.decorGroup.children[0]);
+    const B = wonderGeom(state.wonderIndex).base, off = (B - 1) / 2;
+    const place = (mk, wx, wz) => { const o = mk(); o.position.set(wx, 0, wz); o.rotation.y = Math.random() * TAU; o.scale.multiplyScalar(0.8 + Math.random() * 0.7); this.decorGroup.add(o); };
+    for (let i = 0; i < 30; i++) {
+      const a = i / 30 * TAU + Math.random() * 0.18, rad = off + 15 + Math.random() * 14;
+      const wx = Math.cos(a) * rad, wz = Math.sin(a) * rad * 0.85 + 2; if (wz < -off - 10) continue; // keep off the Nile
+      const r = Math.random(); place(r < 0.4 ? () => this._palm() : r < 0.75 ? () => this._grass() : () => this._rockDecor(), wx, wz);
+    }
+    for (let i = 0; i < 8; i++) place(() => this._palm(), (Math.random() - 0.5) * 72, -off - 13 - Math.random() * 3); // palms on the Nile bank
+  }
   _rebuildLayout(state) {
     this._buildGrid(state);
+    this._buildDecor(state);
     if (this._layoutWonder !== state.wonderIndex) {
       this._layoutWonder = state.wonderIndex;
       while (this.worldGroup.children.length) this.worldGroup.remove(this.worldGroup.children[0]);
@@ -688,7 +712,7 @@ export class Renderer {
     const phase = ((state.clock + DAY_LEN * 0.22) % DAY_LEN) / DAY_LEN, sk = skyAt(phase);
     this.skyMat.uniforms.top.value.setHex(sk.top); this.skyMat.uniforms.bot.value.setHex(sk.bot);
     this.scene.fog.color.setHex(sk.bot);
-    this.hemi.intensity = 0.65 + sk.amb * 0.5; this.sun.color.setHex(sk.sun); this.sun.intensity = 0.7 + sk.amb;
+    this.hemi.intensity = 0.5 + sk.amb * 0.45; this.sun.color.setHex(sk.sun); this.sun.intensity = 1.05 + sk.amb * 1.15; // punchy key light
     const sa = phase * TAU; this.sun.position.set(Math.cos(sa) * 60, 42 + Math.sin(sa) * 40, 34); this.sun.target.position.set(0, 0, 0);
 
     this._updateCamera(vw, vh, state);
