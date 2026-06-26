@@ -13,7 +13,7 @@ Relaxing to play, on desktop, mobile (touch), or with a gamepad.
 
 ## ▶ Play
 
-**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=15**
+**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=16**
 
 (Served straight from this branch via raw.githack.com — bump the `?v=` number to bust the cache after updates.)
 
@@ -27,12 +27,19 @@ polished, colourful mobile-game UI:
 
 - **Start from an empty plot** — nothing is prebuilt. You begin with a little
   stone and grain and raise *everything* yourself.
-- **Tap an empty tile to build** — a picker shows every building with its
-  **type**, **what it does/produces**, and cost. Buildings snap **tile-to-tile**
-  and come in **different shapes and sizes** (a Temple covers 2×2 tiles, a Market
-  or Granary 2×1). Some need a neighbour: a **Nile Farm next to a Water Well**, a
-  **Granary next to a Farm**, **mines next to a Quarry**, a **Market next to a
-  Village**.
+- **Tap an empty tile to build** — a picker with two tabs, **Produce** and
+  **Decor**, shows every building with its **type**, **what it does/produces**,
+  and cost. Buildings snap **tile-to-tile** and come in **different shapes and
+  sizes** (a Temple covers 2×2 tiles, a Market or Granary 2×1). Some need a
+  neighbour: a **Nile Farm next to a Water Well**, a **Granary next to a Farm**,
+  **mines next to a Quarry**, a **Market next to a Village**.
+- **Decor that pays off** — obelisks, statues, gardens and braziers from the
+  **Decor** tab are pure boosts: faster building, more storage, higher output
+  across the whole site.
+- **Read the site at a glance** — every building flies a little **pixel sign**
+  above it showing exactly **what it produces** (a limestone-brick, water-drop,
+  wood-log, copper-ingot, grain or boost-star icon) and its **tier as five gold
+  pips**. Upgrade and the sign updates instantly.
 - **Upgrade everything (Clash-of-Clans tiers)** — tap a placed building to open
   its upgrade panel: see what it produces now, the next tier's output, and the
   cost. Each level multiplies that building's output (and it grows + gets a gold
@@ -127,13 +134,20 @@ tools/              # make_card_art.py (deploy art), test_sim.mjs, smoke.mjs, cl
   (the mesh visibly changes, chips fly, a brick pile grows); masons carry the
   finished bricks up the ramp (smoothstep-eased climb) and set them in place.
 - **Workers you can count** — the crew is rendered to your actual builder count
-  (you start with none and *see* every laborer you hire). Each worker has little
-  **black dot eyes**, hands, feet and a belt; animation is fluid — idle
+  (you start with none and *see* every laborer you hire). Each worker is a proper
+  little figure: **black dot eyes**, a neck, broad shoulders, an Egyptian **nemes
+  headcloth**, hands, sandalled feet and a belt; animation is fluid — idle
   breathing, head bob, springy (damped) arm follow-through.
+- **Deliberate, rewarding building** — masons are slower and purposeful: they
+  queue at the ramp foot, **hug a dressed block to the chest**, climb the pyramid
+  and walk to the **exact next tile**, then bend and set the stone there — the
+  block only appears in that precise cell once it's laid. Slower, but you watch
+  every brick find its place.
 - **Detailed-but-blocky models** — mud-brick houses with parapets and roof-beams,
-  four-silo granaries, columned temples, market stalls; a layered **Nile** with
-  papyrus reeds and a shimmering shallows; sparse desert rocks. Dust, chips and
-  ground rings are pooled. (No wandering animals — kept clean and calm.)
+  four-silo granaries, columned temples, market stalls; real **machine models**
+  (log rollers, rope winches, cranes, sleds); **decor** like obelisks, statues,
+  gardens and braziers; a layered **Nile** with papyrus reeds and a shimmering
+  shallows; sparse desert rocks. Dust, chips and ground rings are pooled.
 - **Performance:** instanced pyramid (one draw call), pooled FX, pixel-ratio
   capped at 1.5. Fixed-timestep sim with a seeded RNG; logic fully separate from
   rendering, so the simulation is deterministic and testable headless.

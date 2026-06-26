@@ -135,8 +135,8 @@ export class UI {
   }
 
   // --- building info helpers ---
-  _catLabel(d) { return d.cat === "resource" ? STR.typeProducer : d.cat === "city" ? STR.typeCivic : d.cat === "machine" ? STR.typeMachine : d.cat; }
-  _defIcon(d) { const p = d.effect.produce && Object.keys(d.effect.produce)[0]; return p ? p : d.cat === "machine" ? "transport" : "city"; }
+  _catLabel(d) { return d.cat === "resource" ? STR.typeProducer : d.cat === "city" ? STR.typeCivic : d.cat === "machine" ? STR.typeMachine : d.cat === "deco" ? STR.typeDeco : d.cat; }
+  _defIcon(d) { const p = d.effect.produce && Object.keys(d.effect.produce)[0]; return p ? p : d.cat === "deco" ? "blessing" : d.cat === "machine" ? "transport" : "city"; }
   _effectText(d, mult = 1) {
     const e = d.effect, parts = [];
     if (e.produce) for (const k in e.produce) parts.push(`+${fmt(e.produce[k] * mult)} ${RES_META[k].name}/s`);
@@ -154,6 +154,7 @@ export class UI {
   openBuildPicker(gx, gz) {
     this.closeUpgrade();
     this._pickTile = { gx, gz };
+    if (!this._buildSection) this._buildSection = "produce";
     const state = this.app.getState();
     this.pickerEl.innerHTML = "";
     const head = el("div", "pk-head");
@@ -161,9 +162,18 @@ export class UI {
     const x = el("button", "pk-x", "✕"); x.onclick = () => this.closeBuildPicker();
     head.appendChild(x);
     this.pickerEl.appendChild(head);
+    // section toggle: Produce vs Deco
+    const segs = el("div", "pk-segs");
+    for (const [sec, label] of [["produce", STR.sectionProduce], ["deco", STR.sectionDeco]]) {
+      const b = el("button", "pk-seg" + (this._buildSection === sec ? " on" : ""), label);
+      b.onclick = () => { this._buildSection = sec; this.openBuildPicker(gx, gz); };
+      segs.appendChild(b);
+    }
+    this.pickerEl.appendChild(segs);
     const grid = el("div", "pk-grid");
     for (const id of PLACEABLE) {
       const d = BDEF[id]; if (!d) continue;
+      if ((this._buildSection === "deco") !== (d.cat === "deco")) continue;
       const reason = placeReason(state, id, gx, gz);
       if (reason === "no") continue;
       const owned = state.buildings[id] || 0;

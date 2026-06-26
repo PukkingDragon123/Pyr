@@ -3,7 +3,7 @@
 // the ramp (no teleport), animals on smooth looped paths. Same interface as the
 // old Canvas2D renderer so main.js is unchanged except the import.
 import * as THREE from "../vendor/three.module.js";
-import { wonderFor, wonderGeom, BUILDINGS, genNodes, buildableTiles, TILE, PLACEABLE, SIZE, footprintCells } from "./data.js";
+import { wonderFor, wonderGeom, BUILDINGS, genNodes, buildableTiles, TILE, PLACEABLE, SIZE, footprintCells, RES_META } from "./data.js";
 import { layerCells } from "./iso.js";
 
 const BUILD_BY_ID = {}; for (const b of BUILDINGS) BUILD_BY_ID[b.id] = b;
@@ -102,8 +102,9 @@ export class Renderer {
 
     // groups
     this.gridGroup = new THREE.Group(); scene.add(this.gridGroup);   // buildable tile lattice
-    this.decorGroup = new THREE.Group(); scene.add(this.decorGroup); // scattered palms / grass / rocks
+    this.decorGroup = new THREE.Group(); scene.add(this.decorGroup); // scattered desert rocks
     this.worldGroup = new THREE.Group(); scene.add(this.worldGroup); // tile-placed buildings
+    this.billboardGroup = new THREE.Group(); scene.add(this.billboardGroup); // produce/tier badges
     this.nodeGroup = new THREE.Group(); scene.add(this.nodeGroup);   // procedural resource map (trees/rocks/...)
     this.supplyGroup = new THREE.Group(); scene.add(this.supplyGroup); // sleds + stone-cutting yard
     this.workerGroup = new THREE.Group(); scene.add(this.workerGroup);
@@ -284,12 +285,111 @@ export class Renderer {
   _placeModel(id) {
     const b = BUILD_BY_ID[id];
     if (b && b.cat === "resource") return this._campModel(id);
+    if (b && b.cat === "deco") return this._decoModel(id);
     if (id === "granary") return this._buildingModel("granary");
     if (id === "market") return this._buildingModel("market");
     if (id === "temple") return this._buildingModel("temple");
     if (id === "storage_yard") return this._buildingModel("storage");
     return this._buildingModel("house"); // village, docks
   }
+  // decoration models (the "Deco" build section)
+  _decoModel(id) {
+    const grp = new THREE.Group();
+    if (id === "obelisk") {
+      const base = this._box(0.7, 0.3, 0.7, 0xd8c9a6, 0.15); base.position.y = 0.15; grp.add(base);
+      const sh = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.26, 2.3, 4), this._mat(0xc9a86a)); sh.position.y = 1.45; sh.rotation.y = Math.PI / 4; sh.castShadow = true; grp.add(sh);
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.35, 4), this._mat(0xf3c44e)); tip.position.y = 2.75; tip.rotation.y = Math.PI / 4; grp.add(tip);
+    } else if (id === "garden") {
+      const soil = this._box(1.5, 0.16, 1.5, 0x6b4a2c, 0.08); grp.add(soil);
+      const pool = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.06, 0.7), new THREE.MeshStandardMaterial({ color: 0x49b5d6, roughness: 0.2, metalness: 0.2 })); pool.position.set(0.2, 0.18, 0.2); grp.add(pool);
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 1.1, 6), this._mat(0x8a5e34)); trunk.position.set(-0.4, 0.6, -0.3); trunk.castShadow = true; grp.add(trunk);
+      for (let i = 0; i < 5; i++) { const fr = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.7, 4), this._mat(0x4f9e38)); const a = i / 5 * TAU; fr.position.set(-0.4 + Math.cos(a) * 0.28, 1.15, -0.3 + Math.sin(a) * 0.28); fr.rotation.set(Math.PI / 2 - 0.5, a, 0); fr.scale.set(1, 1, 0.4); grp.add(fr); }
+    } else if (id === "statue") {
+      const ped = this._box(1.1, 0.4, 1.4, 0xd8c9a6, 0.2); grp.add(ped);
+      const body = this._box(0.6, 0.5, 1.3, 0xcdbb8e, 0.65); grp.add(body); body.castShadow = true;
+      const head = this._box(0.5, 0.5, 0.5, 0xd8c69a, 1.1); head.position.z = 0.55; grp.add(head); head.castShadow = true;
+      const hd = this._box(0.6, 0.2, 0.55, 0x3a6ea5, 1.42); hd.position.z = 0.55; grp.add(hd); // nemes headdress
+    } else { // brazier
+      const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.22, 1.0, 8), this._mat(0x7c5530)); stand.position.y = 0.5; stand.castShadow = true; grp.add(stand);
+      const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.26, 0.3, 10), this._mat(0xb5894a)); bowl.position.y = 1.05; grp.add(bowl);
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.6, 6), new THREE.MeshStandardMaterial({ color: 0xff8a3a, emissive: 0xff6a1a, emissiveIntensity: 0.8, roughness: 0.5 })); flame.position.y = 1.45; grp.add(flame); grp._flame = flame;
+    }
+    return grp;
+  }
+  // distinct machine models (ramp equipment)
+  _machineModel(id) {
+    const grp = new THREE.Group();
+    if (id === "wooden_rollers") {
+      const plank = this._box(1.2, 0.14, 0.7, 0xb08a5a, 0.34); grp.add(plank);
+      for (let i = -1; i <= 1; i++) { const log = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.82, 8), this._mat(0x8a5e34)); log.rotation.x = Math.PI / 2; log.position.set(i * 0.4, 0.12, 0); log.castShadow = true; grp.add(log); }
+      const block = this._box(0.44, 0.4, 0.44, 0xe7d6ad, 0.61); grp.add(block);
+    } else if (id === "crane") {
+      const post = this._box(0.16, 1.3, 0.16, 0x7c5530, 0.65); post.castShadow = true; grp.add(post);
+      const beam = this._box(1.7, 0.1, 0.1, 0x8a5e34, 1.2); beam.rotation.z = -0.3; grp.add(beam);
+      const cw = this._box(0.32, 0.32, 0.32, 0x9a7a8e, 0); cw.position.set(-0.75, 1.42, 0); grp.add(cw);
+    } else if (id === "rope_winch") {
+      for (const s of [0.3, -0.3]) { const p = this._box(0.12, 1.0, 0.12, 0x7c5530, 0.5); p.position.x = s; grp.add(p); }
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.5, 10), this._mat(0x8a5e34)); wheel.rotation.z = Math.PI / 2; wheel.position.y = 0.95; wheel.castShadow = true; grp.add(wheel);
+    } else { // sled / generic
+      const sled = this._box(0.9, 0.16, 1.4, 0x6e4a2a, 0.2); grp.add(sled);
+      for (const s of [0.4, -0.4]) { const r = this._box(0.1, 0.1, 1.5, 0x553820, 0.07); r.position.x = s; grp.add(r); }
+      const block = this._box(0.5, 0.45, 0.5, 0xe3d3aa, 0.55); block.castShadow = true; grp.add(block);
+    }
+    return grp;
+  }
+  // canvas badge that floats over a building: produce colour + tier pips
+  _badgeTex(res, tier) {
+    if (!this._badges) this._badges = {};
+    const key = res + "/" + tier; if (this._badges[key]) return this._badges[key];
+    const S = 64, c = document.createElement("canvas"); c.width = c.height = S;
+    const g = c.getContext("2d");
+    // flat blocky sign matching the pixel UI: drop shadow, gold edge, dark panel
+    g.fillStyle = "rgba(10,7,3,0.55)"; g.fillRect(7, 8, 54, 54);
+    g.fillStyle = "#caa24a"; g.fillRect(4, 3, 56, 56);
+    g.fillStyle = "#241a0e"; g.fillRect(8, 7, 48, 44);
+    this._badgeIcon(g, res);                       // recognizable resource glyph
+    const n = 5, pw = 7, gap = 2, x0 = 11, py = 53;
+    for (let i = 0; i < n; i++) { g.fillStyle = i < tier ? "#f3c44e" : "rgba(255,255,255,0.16)"; g.fillRect(x0 + i * (pw + gap), py, pw, 6); }
+    const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; t.colorSpace = THREE.SRGBColorSpace;
+    this._badges[key] = t; return t;
+  }
+  _star(g, cx, cy, R, r, n) {
+    g.beginPath();
+    for (let i = 0; i < n * 2; i++) { const rad = i % 2 ? r : R, a = -Math.PI / 2 + i * Math.PI / n; const x = cx + Math.cos(a) * rad, y = cy + Math.sin(a) * rad; i ? g.lineTo(x, y) : g.moveTo(x, y); }
+    g.closePath(); g.fill();
+  }
+  _badgeIcon(g, res) {
+    const m = RES_META[res];
+    const col = res === "_boost" ? "#f3c44e" : (m ? m.color : "#dddddd");
+    const dk = res === "_boost" ? "#b8862c" : (m ? m.dark : "#999999");
+    if (res === "limestone") {                     // stacked cut bricks
+      g.fillStyle = col; g.fillRect(14, 13, 36, 11); g.fillRect(14, 26, 36, 11);
+      g.fillStyle = dk; g.fillRect(14, 24, 36, 2); g.fillRect(31, 13, 2, 11); g.fillRect(22, 26, 2, 11); g.fillRect(41, 26, 2, 11);
+    } else if (res === "granite") {                // speckled block
+      g.fillStyle = col; g.fillRect(15, 12, 34, 26);
+      g.fillStyle = dk; for (const p of [[20, 17], [31, 15], [40, 20], [24, 29], [37, 31], [44, 25], [28, 22]]) g.fillRect(p[0], p[1], 4, 4);
+    } else if (res === "wood") {                    // log with end-grain ring
+      g.fillStyle = col; g.fillRect(13, 17, 38, 16);
+      g.fillStyle = dk; g.fillRect(13, 22, 38, 2); g.fillRect(13, 28, 38, 2);
+      g.fillStyle = "#d8a86a"; g.beginPath(); g.arc(49, 25, 6, 0, Math.PI * 2); g.fill();
+      g.fillStyle = dk; g.beginPath(); g.arc(49, 25, 3, 0, Math.PI * 2); g.fill();
+    } else if (res === "copper") {                  // metal ingot
+      g.fillStyle = col; g.beginPath(); g.moveTo(16, 33); g.lineTo(22, 18); g.lineTo(42, 18); g.lineTo(48, 33); g.closePath(); g.fill();
+      g.fillStyle = "rgba(255,255,255,0.4)"; g.fillRect(24, 20, 16, 4);
+      g.fillStyle = dk; g.fillRect(18, 30, 28, 3);
+    } else if (res === "food") {                    // bread loaf
+      g.fillStyle = col; g.beginPath(); g.moveTo(13, 35); g.quadraticCurveTo(13, 17, 32, 17); g.quadraticCurveTo(51, 17, 51, 35); g.closePath(); g.fill();
+      g.fillStyle = dk; g.fillRect(24, 21, 3, 11); g.fillRect(31, 21, 3, 11); g.fillRect(38, 21, 3, 11);
+    } else if (res === "water") {                   // droplet
+      g.fillStyle = col; g.beginPath(); g.arc(32, 29, 11, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.moveTo(32, 9); g.lineTo(22, 26); g.lineTo(42, 26); g.closePath(); g.fill();
+      g.fillStyle = "rgba(255,255,255,0.45)"; g.beginPath(); g.arc(28, 30, 3.5, 0, Math.PI * 2); g.fill();
+    } else {                                        // boost star
+      g.fillStyle = col; this._star(g, 32, 25, 15, 6.5, 5);
+      g.fillStyle = "rgba(255,255,255,0.4)"; this._star(g, 32, 25, 7, 3, 5);
+    }
+  }
+  _badgeResFor(id) { const e = (BUILD_BY_ID[id] || {}).effect || {}; return e.produce ? Object.keys(e.produce)[0] : "_boost"; }
   // buildable tile lattice (rebuilt per wonder)
   _buildGrid(state) {
     const key = state.wonderIndex + "";
@@ -333,6 +433,7 @@ export class Renderer {
     if (this._layoutWonder !== state.wonderIndex) {
       this._layoutWonder = state.wonderIndex;
       while (this.worldGroup.children.length) this.worldGroup.remove(this.worldGroup.children[0]);
+      while (this.billboardGroup.children.length) this.billboardGroup.remove(this.billboardGroup.children[0]);
       this.tileModels = {}; this.machineSlots = {}; this._camps = null; this._layoutReady = false; this.plops.length = 0;
     }
     this._refreshBuildings(state);
@@ -361,22 +462,29 @@ export class Renderer {
       }
     }
     // diff against rendered models
-    for (const k in this.tileModels) if (desired[k] !== this.tileModels[k].id) { const tm = this.tileModels[k]; this.worldGroup.remove(tm.grp); if (tm.ring) this.worldGroup.remove(tm.ring); delete this.tileModels[k]; }
+    for (const k in this.tileModels) if (desired[k] !== this.tileModels[k].id) { const tm = this.tileModels[k]; this.worldGroup.remove(tm.grp); if (tm.ring) this.worldGroup.remove(tm.ring); if (tm.badge) this.billboardGroup.remove(tm.badge); delete this.tileModels[k]; }
     for (const k in desired) {
       if (this.tileModels[k]) continue;
       const [gx, gz] = k.split(",").map(Number), id = desired[k], sz = SIZE[id] || [1, 1];
       const grp = this._placeModel(id);
-      grp.position.set((gx + (sz[0] - 1) / 2) * TILE, 0, (gz + (sz[1] - 1) / 2) * TILE); // footprint centre
-      const fs = Math.max(sz[0], sz[1]) > 1 ? Math.max(sz[0], sz[1]) * 0.92 : 1;          // bigger footprint → bigger model
-      this.worldGroup.add(grp); this.tileModels[k] = { id, grp, scale: fs, tier: 1, ring: null };
+      const cx = (gx + (sz[0] - 1) / 2) * TILE, cz = (gz + (sz[1] - 1) / 2) * TILE;
+      grp.position.set(cx, 0, cz);                                                          // footprint centre
+      const fs = Math.max(sz[0], sz[1]) > 1 ? Math.max(sz[0], sz[1]) * 0.92 : 1;            // bigger footprint → bigger model
+      this.worldGroup.add(grp);
+      // floating produce/tier badge above the building
+      const res = this._badgeResFor(id), baseY = 1.9 + (Math.max(sz[0], sz[1]) - 1) * 0.9;
+      const badge = new THREE.Sprite(new THREE.SpriteMaterial({ map: this._badgeTex(res, 1), transparent: true })); badge.scale.set(0.95, 0.95, 1); badge.position.set(cx, baseY, cz);
+      this.billboardGroup.add(badge);
+      this.tileModels[k] = { id, grp, scale: fs, tier: 1, ring: null, badge, badgeRes: res, baseY };
       if (this._layoutReady) { grp.scale.setScalar(0.01); this.plops.push({ grp, t: 0, target: fs }); this.spawnDust(new THREE.Vector3(gx * TILE, 0.3, gz * TILE), 6); this.ring(new THREE.Vector3(gx * TILE, 0.05, gz * TILE), 0xffe0a0); }
       else grp.scale.setScalar(fs);
     }
-    // reflect upgrade tier: bigger + a gold base ring on tier ≥ 2
+    // reflect upgrade tier: bigger model + gold base ring + tier pips on the badge
     for (const k in this.tileModels) {
       const tm = this.tileModels[k], tier = (state.tier && state.tier[tm.id]) || 1;
       if (tm.tier === tier) continue;
       tm.tier = tier; tm.grp.scale.setScalar(tm.scale * (1 + (tier - 1) * 0.07));
+      if (tm.badge) tm.badge.material.map = this._badgeTex(tm.badgeRes, tier);
       if (!tm.ring && tier >= 2) { const r = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.82, 22), new THREE.MeshBasicMaterial({ color: 0xf6ce5a, transparent: true, side: THREE.DoubleSide, depthWrite: false })); r.rotation.x = -Math.PI / 2; r.position.copy(tm.grp.position).setY(0.07); this.worldGroup.add(r); tm.ring = r; }
       if (tm.ring) tm.ring.material.opacity = Math.min(0.85, 0.18 + tier * 0.14);
     }
@@ -387,7 +495,7 @@ export class Renderer {
       if (b.cat !== "machine") continue;
       const want = Math.min(state.buildings[b.id] || 0, 10);
       let arr = this.machineSlots[b.id]; if (!arr) arr = this.machineSlots[b.id] = [];
-      while (arr.length < want) { const i = arr.length; const m = this._buildingModel("ramp"); m.position.set((z[0] + (i % z[2]) * 1.6) - off, 0, (z[1] + Math.floor(i / z[2]) * 1.6) - off); this.worldGroup.add(m); arr.push(m); }
+      while (arr.length < want) { const i = arr.length; const m = this._machineModel(b.id); m.position.set((z[0] + (i % z[2]) * 1.6) - off, 0, (z[1] + Math.floor(i / z[2]) * 1.6) - off); this.worldGroup.add(m); arr.push(m); }
       while (arr.length > want) { const mm = arr.pop(); this.worldGroup.remove(mm); }
     }
     this._layoutReady = true;
@@ -629,21 +737,35 @@ export class Renderer {
   _makeWorker() {
     const i = (Math.random() * SKINS.length) | 0;
     const skin = this._mat(SKINS[i]), cloth = this._mat(CLOTHS[(Math.random() * CLOTHS.length) | 0]), kilt = this._mat(0xefe7d2);
+    const linen = this._mat(0xf2ead2);                 // headcloth linen
     const grp = new THREE.Group();
+    // legs + sandalled feet
     const legL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.5, 0.16), skin); legL.geometry.translate(0, -0.25, 0); legL.position.set(0.1, 0.5, 0); legL.castShadow = true;
-    const footL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.1, 0.24), kilt); footL.position.set(0, -0.5, 0.04); legL.add(footL);
+    const footL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.1, 0.26), kilt); footL.position.set(0, -0.5, 0.05); legL.add(footL);
     const legR = legL.clone(); legR.position.x = -0.1;
+    // torso with broader shoulders, belt and kilt
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.45, 0.24), skin); body.position.y = 0.74; body.castShadow = true;
+    const shoulders = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.15, 0.26), skin); shoulders.position.y = 0.19; shoulders.castShadow = true; body.add(shoulders);
     const belt = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.08, 0.28), this._mat(0x7c5530)); belt.position.y = -0.18; body.add(belt);
-    const kiltM = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.22, 0.28), kilt); kiltM.position.y = 0.56;
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.26), skin); head.position.y = 1.12; head.castShadow = true;
+    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.13, 0.16), skin); neck.position.y = 0.26; body.add(neck);
+    const kiltM = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.24, 0.3), kilt); kiltM.position.y = 0.55;
+    // head with black-dot eyes
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.26), skin); head.position.y = 1.14; head.castShadow = true;
     const eyeL = new THREE.Mesh(this._eyeGeo, this._black); eyeL.position.set(0.07, 0.02, 0.135); head.add(eyeL);
     const eyeR = eyeL.clone(); eyeR.position.x = -0.07; head.add(eyeR);
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.16, 0.3), cloth); cap.position.y = 0.18; head.add(cap);
+    // nemes headcloth: crown + brow band + side lappets framing the face + back fall
+    const crown = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.14, 0.3), linen); crown.position.y = 0.16; head.add(crown);
+    const band = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.06, 0.31), cloth); band.position.y = 0.08; head.add(band);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.2, 0.1), linen); back.position.set(0, 0.0, -0.13); head.add(back);
+    for (const sx of [0.17, -0.17]) { const lap = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.22, 0.2), linen); lap.position.set(sx, -0.05, 0.02); head.add(lap); }
+    // arms + hands
     const armL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.42, 0.12), skin); armL.geometry.translate(0, -0.21, 0); armL.position.set(0.26, 0.96, 0); armL.castShadow = true;
     const handL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.12, 0.14), skin); handL.position.set(0, -0.44, 0); armL.add(handL);
     const armR = armL.clone(); armR.position.x = -0.26;
-    const block = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.32, 0.34), this._mat(0xe3d3aa)); block.position.set(0, 1.4, 0.05); block.visible = false; block.castShadow = true;
+    // carried cut-limestone block, hugged against the chest so the face stays visible
+    const block = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.28, 0.3), this._mat(0xe3d3aa)); block.position.set(0, 0.84, 0.38); block.visible = false; block.castShadow = true;
+    const blockTop = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.05, 0.32), this._mat(0xf2e6c2)); blockTop.position.y = 0.15; block.add(blockTop);
+    const blockEdge = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.05, 0.32), this._mat(0xb9a373)); blockEdge.position.y = -0.14; block.add(blockEdge);
     grp.add(legL, legR, body, kiltM, head, armL, armR, block);
     grp.scale.setScalar(0.8);
     return { grp, legL, legR, armL, armR, block, body, head,
@@ -754,6 +876,7 @@ export class Renderer {
     this._updateSupply(state, stats, dt);
     this._updateGatherers(state, stats, dt);
     this._updatePlops(dt);
+    for (const k in this.tileModels) { const tm = this.tileModels[k]; if (tm.badge) tm.badge.position.y = tm.baseY + Math.sin(state.clock * 2 + tm.baseY * 3) * 0.12; } // bob badges
     this._updateFx(dt);
 
     this.r.render(this.scene, this.cam);
@@ -775,7 +898,7 @@ export class Renderer {
   _updateWorkers(state, stats, dt) {
     const g = wonderGeom(state.wonderIndex), B = g.base, off = (B - 1) / 2;
     const key = state.wonderIndex + "/" + state.layer + "/" + (state.complete ? "c" : "b");
-    if (this.revealKey !== key) { this.revealKey = key; this.shown = 0; for (const w of this.workers) { w.state = "fetch"; w.timer = Math.random() * 1.0; w.placed = false; } }
+    if (this.revealKey !== key) { this.revealKey = key; this.shown = 0; for (const w of this.workers) { w.state = "fetch"; w.timer = Math.random() * 1.0; w.placed = false; w.cell = null; } }
     const cells = state.complete ? [] : layerCells(g.base, state.layer);
     // cubes that *should* be visible given sim progress; reveal never outruns this
     const bpc = Math.max(1, g.blocksPerCube || 1);
@@ -789,44 +912,48 @@ export class Renderer {
     while (this.workers.length > target) { const w = this.workers.pop(); this.workerGroup.remove(w.grp); }
 
     const whip = !!(state.whip && state.whip.boostT > 0);
-    const moveBase = 0.5 + Math.min(2.0, (stats.buildRate || 0) * 0.045);
+    const moveBase = 0.30 + Math.min(1.0, (stats.buildRate || 0) * 0.028);   // slower, deliberate
 
-    // ramp foot (front, ground) and head (current build top, front-center)
-    const footX = -off + B * 0.5, footZ = -off + B + 2.2;
+    // ramp foot (front, ground); masons climb to the EXACT next active-layer cell
+    const footX = -off + B * 0.5, footZ = -off + B + 2.4;
     const topY = state.complete ? g.layers : state.layer;
-    const headZ = -off + (state.complete ? B * 0.5 : (state.layer + Math.max(1, B - 2 * state.layer) * 0.5));
-    this._topW = new THREE.Vector3(0, topY + 0.5, Math.max(-off + 0.5, headZ));
+    this._topW = new THREE.Vector3(0, topY + 0.5, Math.max(-off + 0.5, -off + state.layer + Math.max(1, B - 2 * state.layer) * 0.5));
+    let climbing = 0; for (const w of this.workers) if (w.state === "haul" || w.state === "place") climbing++;
+    let nextSlot = this.shown + climbing;
+    const cellAt = (i) => { const c = cells[Math.min(i, cells.length - 1)] || { gx: B / 2, gy: B / 2 }; return { x: c.gx - off, z: c.gy - off }; };
 
     this.workerHits = [];
     for (const w of this.workers) {
       w.phase += dt; if (w.whipT > 0) w.whipT -= dt;
-      const ms = moveBase * (w.whipT > 0 ? 2.3 : 1) * (whip ? 1.3 : 1);
+      const ms = moveBase * (w.whipT > 0 ? 2.0 : 1) * (whip ? 1.3 : 1);
       let px, py, pz, walk = 0, carry = false, bend = 0;
+      const cell = w.cell != null ? cellAt(w.cell) : { x: footX, z: footZ };
       if (w.state === "fetch") {
-        // queue at the foot, mill, then head up — the site stays busy even when the build is slow
+        // queue at the foot, then carry a block to the next cell
         w.timer -= dt;
         px = footX + w.lane; py = 0; pz = footZ + w.foot; walk = 0.18;
-        if (w.timer <= 0 && !state.complete && cells.length) { w.state = "haul"; w.p = 0; w.placed = false; }
+        if (w.timer <= 0 && !state.complete && cells.length && nextSlot < real && nextSlot < cells.length) { w.cell = nextSlot++; w.state = "haul"; w.p = 0; w.placed = false; }
       } else if (w.state === "haul") {
-        w.p += ms * dt * 0.5; if (w.p >= 1) { w.p = 1; w.state = "place"; w.timer = 0.5 / (w.whipT > 0 ? 1.6 : 1); w.placed = false; }
-        const ep = smooth(w.p); px = footX + (1 - ep) * w.lane; py = topY * ep; pz = footZ + (this._topW.z - footZ) * ep; carry = true; walk = 1;
-        if (Math.random() < dt * 3 * ms) this.spawnDust(new THREE.Vector3(px, py + 0.1, pz), 1);
+        w.p += ms * dt * 0.5; if (w.p >= 1) { w.p = 1; w.state = "place"; w.timer = 0.8 / (w.whipT > 0 ? 1.5 : 1); w.placed = false; }
+        const ep = smooth(w.p); px = footX + (cell.x - footX) * ep; py = topY * ep; pz = footZ + (cell.z - footZ) * ep; carry = true; walk = 1;
+        if (Math.random() < dt * 2 * ms) this.spawnDust(new THREE.Vector3(px, py + 0.1, pz), 1);
       } else if (w.state === "place") {
-        w.timer -= dt; const pr = 1 - Math.max(0, w.timer) / 0.5;
-        px = w.lane * 0.12; py = topY; pz = this._topW.z; bend = Math.sin(Math.min(1, pr) * Math.PI); carry = pr < 0.55;
-        // a delivered block only appears if the sim has paid for it (no teleporting bricks)
-        if (!w.placed && pr > 0.5) { w.placed = true; if (this.shown < real) { this.shown++; this.spawnDust(this._topW.clone(), 6); } else this.spawnDust(this._topW.clone(), 2); }
+        w.timer -= dt; const pr = 1 - Math.max(0, w.timer) / 0.8;
+        px = cell.x; py = topY; pz = cell.z; bend = Math.sin(Math.min(1, pr) * Math.PI); carry = pr < 0.5;
+        // the block appears at this exact cell once set (gated to sim progress)
+        if (!w.placed && pr > 0.5) { w.placed = true; const tgt = Math.min(real, (w.cell || 0) + 1); if (this.shown < tgt) this.shown = tgt; this.spawnDust(new THREE.Vector3(cell.x, topY + 0.3, cell.z), 5); }
         if (w.timer <= 0) { w.state = "return"; w.p = 1; }
-      } else { // return
-        w.p -= ms * dt * 0.9; if (w.p <= 0) { w.p = 0; w.state = "fetch"; w.timer = 0.3 + Math.random() * 0.9; }
-        const ep = smooth(w.p); px = footX + (1 - ep) * w.lane; py = topY * ep; pz = footZ + (this._topW.z - footZ) * ep; walk = 1;
+      } else { // return — walk back down to the foot
+        w.p -= ms * dt * 0.8; if (w.p <= 0) { w.p = 0; w.state = "fetch"; w.timer = 0.4 + Math.random() * 1.0; w.cell = null; }
+        const ep = smooth(w.p); px = footX + (cell.x - footX) * ep; py = topY * ep; pz = footZ + (cell.z - footZ) * ep; walk = 1;
       }
       w.grp.position.set(px, py, pz);
-      // face direction of travel (toward the build when hauling, away when returning)
-      w.grp.rotation.y = (w.state === "haul" || w.state === "place") ? Math.atan2(0 - px, this._topW.z - pz) : Math.atan2(px - 0, pz - this._topW.z);
+      // face direction of travel
+      const fx2 = (w.state === "haul" || w.state === "place") ? cell.x : footX, fz2 = (w.state === "haul" || w.state === "place") ? cell.z : footZ;
+      w.grp.rotation.y = Math.atan2((fx2 - px) || 0.0001, (fz2 - pz) || 0.0001);
       const sw = Math.sin(w.phase * 8) * (walk ? 0.7 * walk + 0.15 : 0.05);
       w.legL.rotation.x = sw; w.legR.rotation.x = -sw;
-      const tAL = carry ? -2.2 : -sw, tAR = carry ? -2.2 : sw;
+      const tAL = carry ? -1.35 : -sw, tAR = carry ? -1.35 : sw;
       w.aL += (tAL - w.aL) * 0.25; w.aR += (tAR - w.aR) * 0.25;     // springy arm follow-through
       w.armL.rotation.x = w.aL; w.armR.rotation.x = w.aR;
       w.body.rotation.x = bend * 0.9;

@@ -314,6 +314,9 @@ body{-webkit-font-smoothing:none}
 .pk-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .pk-title{font-size:14px;font-weight:900;color:var(--edge)}
 .pk-x,.up-x{width:28px;height:28px;font-size:13px;color:var(--text);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.pk-segs{display:flex;gap:6px;margin-bottom:10px}
+.pk-seg{flex:1;padding:7px;font-size:12px;font-weight:800;background:var(--panel2)!important;border:2px solid var(--ink)!important;color:var(--muted);cursor:pointer}
+.pk-seg.on{background:var(--edge)!important;color:#1a1208!important}
 .pk-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .pk-item{display:flex;align-items:center;gap:9px;padding:8px;text-align:left}
 .pk-item:not(.disabled){border-color:var(--green2)!important}

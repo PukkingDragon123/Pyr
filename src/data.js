@@ -126,6 +126,20 @@ export const BUILDINGS = [
   { id: "temple", name: "Temple", cat: "city", zone: "temple", scale: 1.2, unlock: 500,
     desc: "Honors the gods. +5% build speed each.",
     cost: { limestone: 420, granite: 45 }, effect: { buildSpeed: 0.05 } },
+
+  // --- decorations: placed for a boost (the "Deco" build section) ---
+  { id: "obelisk", name: "Obelisk", cat: "deco", zone: "deco", scale: 1.3, unlock: 0,
+    desc: "A proud granite spire. +6% build speed each.",
+    cost: { limestone: 80, granite: 8 }, effect: { buildSpeed: 0.06 } },
+  { id: "garden", name: "Palm Garden", cat: "deco", zone: "deco", scale: 1.28, unlock: 20,
+    desc: "Shaded pools. +400 food & water storage each.",
+    cost: { wood: 70, water: 50 }, effect: { cap: { food: 400, water: 400 } } },
+  { id: "statue", name: "Sphinx Statue", cat: "deco", zone: "deco", scale: 1.34, unlock: 80,
+    desc: "Guardian of the works. +4% all production each.",
+    cost: { limestone: 160, granite: 24 }, effect: { prodAll: 0.04 } },
+  { id: "brazier", name: "Sacred Brazier", cat: "deco", zone: "deco", scale: 1.24, unlock: 150,
+    desc: "An eternal flame. +5% build speed each.",
+    cost: { copper: 40, wood: 70 }, effect: { buildSpeed: 0.05 } },
 ];
 
 // ----------------------------------------------------------------------------
@@ -134,7 +148,7 @@ export const BUILDINGS = [
 // building (adjacency). Crew / machines / blessings stay in the side menu.
 // ----------------------------------------------------------------------------
 export const TILE = 2.3;                                  // world units per grid cell
-export const PLACEABLE = ["quarry", "well", "farm", "lumber_camp", "granite_mine", "copper_mine", "village", "granary", "storage_yard", "docks", "market", "temple"];
+export const PLACEABLE = ["quarry", "well", "farm", "lumber_camp", "granite_mine", "copper_mine", "village", "granary", "storage_yard", "docks", "market", "temple", "obelisk", "garden", "statue", "brazier"];
 // a building can only go on a tile next to one of these (null = anywhere)
 export const ADJ_REQ = {
   farm: "well", granary: "farm", granite_mine: "quarry", copper_mine: "quarry", market: "village", temple: "market",
