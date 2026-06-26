@@ -429,8 +429,7 @@ export class UI {
       const ref = this.resChips[k];
       const cap = stats.caps ? stats.caps[k] : Infinity;
       ref.v.textContent = fmt(state.res[k]);
-      let net = stats.prod[k] || 0;
-      if (k === "limestone") net -= (state._lastFlow || 0) * stats.lpb;
+      const net = stats.prod[k] || 0;   // build no longer drains limestone
       // at cap, surplus production is wasted — show "FULL" instead of a phantom +rate
       const full = Number.isFinite(cap) && state.res[k] >= cap - 1 && net > 0;
       ref.net.textContent = full ? STR.res.full : (net >= 0 ? "+" : "") + fmt(net) + STR.res.perSec;

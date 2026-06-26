@@ -98,17 +98,14 @@ export function step(s, dt) {
     if (nx.id !== "clear") pushLog(s, nx.name + " — " + nx.desc, "info");
   }
 
-  // build (worker-paced visuals are driven by _lastFlow / pending in the renderer)
-  let limited = false;
+  // build — the pyramid rises purely from builder labor; it does NOT consume
+  // resources (resources are for placing & upgrading buildings). This keeps the
+  // game playable: hire laborers, watch it build.
   if (!s.complete) {
-    const desired = st.buildRate * dt;
-    const afford = s.res.limestone / st.lpb;
-    const built = Math.min(desired, afford);
-    if (built < desired - 1e-9 && st.buildRate > 0) limited = true;
-    if (built > 0) { s.res.limestone -= built * st.lpb; addBlocks(s, built); s._lastFlow = built / dt; }
-    else s._lastFlow = 0;
+    const built = st.buildRate * dt;
+    if (built > 0) { addBlocks(s, built); s._lastFlow = built / dt; } else s._lastFlow = 0;
   } else s._lastFlow = 0;
-  s._limited = limited;
+  s._limited = false;
 
   // level-up moments
   const lvl = levelForXp(s.stats.totalBlocksAllTime);
@@ -287,14 +284,9 @@ export function simulateOffline(s, realSeconds) {
   if (eff < 2) return null;
   const st = computeStats(s);
   const before = {}; for (const k of RES) before[k] = s.res[k];
-  const limeStart = before.limestone;
   for (const k of RES) s.res[k] = Math.max(0, Math.min(st.caps[k], s.res[k] + st.prod[k] * eff));
-  let blocks = st.buildRate * eff;
-  blocks = Math.min(blocks, (limeStart + st.prod.limestone * eff) / st.lpb);
-  if (blocks > 0 && !s.complete) {
-    s.res.limestone = Math.max(0, s.res.limestone - blocks * st.lpb);
-    const n = s._fx.length; addBlocks(s, blocks); s._fx.length = n;
-  }
+  const blocks = st.buildRate * eff;                       // build no longer consumes resources
+  if (blocks > 0 && !s.complete) { const n = s._fx.length; addBlocks(s, blocks); s._fx.length = n; }
   const gained = {}; for (const k of RES) gained[k] = s.res[k] - before[k];
   return { seconds: capped, blocks, gained };
 }

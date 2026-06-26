@@ -13,7 +13,7 @@ Relaxing to play, on desktop, mobile (touch), or with a gamepad.
 
 ## ▶ Play
 
-**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=14**
+**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=15**
 
 (Served straight from this branch via raw.githack.com — bump the `?v=` number to bust the cache after updates.)
 
@@ -47,7 +47,9 @@ polished, colourful mobile-game UI:
   teleporting. More laborers and faster machines = a faster build.
 - **Click a worker on the pyramid to crack the whip** — they sprint and everyone
   builds faster for a few seconds.
-- **Limestone** is the building material; if you run short, build more quarries.
+- **The pyramid rises from labor, not materials** — building it never drains
+  your resources; just hire laborers and it climbs. Resources are spent only on
+  placing and upgrading buildings, so you can never get stuck.
 - A calm **desert world**: the **Nile** with papyrus reeds, your **worker
   village & camps**, and the rising pyramid.
 - Finish every layer to raise the **golden capstone**, then **found a New
@@ -116,10 +118,10 @@ tools/              # make_card_art.py (deploy art), test_sim.mjs, smoke.mjs, cl
   city buildings are placed (and validated for adjacency) on the grid. The
   economy keeps building *counts* authoritative, so placement is a layer over
   the same tested simulation.
-- **Polished, simple mobile UI** — warm glossy rounded panels with soft layered
-  depth shadows, juicy gradient buttons with a springy press, coin-style resource
-  counters with a **storage fill bar**, a clean rounded build-sheet and upgrade
-  panel. No tutorial clutter — just a one-line hint. Pure CSS + Three.js.
+- **Flat blocky / pixel UI** — solid fills, square corners, crisp borders and
+  hard (no-blur) shadows in a monospace face. No gradients, no rounding. Resource
+  counters carry a **storage fill bar**; build-sheet and upgrade panel match. No
+  tutorial clutter — just a one-line hint.
 - **A real construction supply line:** sled teams drag rough stone from the
   quarry to a cutting yard; a stonecutter shapes **solid rock → dressed brick**
   (the mesh visibly changes, chips fly, a brick pile grows); masons carry the
