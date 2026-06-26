@@ -7,8 +7,8 @@ import { wonderFor, wonderGeom, BUILDINGS, genNodes, buildableTiles, TILE, PLACE
 import { layerCells } from "./iso.js";
 
 const BUILD_BY_ID = {}; for (const b of BUILDINGS) BUILD_BY_ID[b.id] = b;
-const RES_OF = { quarry: "limestone", sand_pit: "sand", lumber_camp: "wood", farm: "food", well: "water", granite_mine: "granite", copper_mine: "copper" };
-const ID_OF_RES = { limestone: "quarry", sand: "sand_pit", wood: "lumber_camp", food: "farm", water: "well", granite: "granite_mine", copper: "copper_mine" };
+const RES_OF = { quarry: "limestone", lumber_camp: "wood", farm: "food", well: "water", granite_mine: "granite", copper_mine: "copper" };
+const ID_OF_RES = { limestone: "quarry", wood: "lumber_camp", food: "farm", water: "well", granite: "granite_mine", copper: "copper_mine" };
 
 export const DAY_LEN = 240;
 const TAU = Math.PI * 2;
@@ -87,6 +87,18 @@ export class Renderer {
     deep.rotation.x = -Math.PI / 2; deep.position.set(0, 0.06, -35); scene.add(deep); this.nile = deep;
     const shallow = new THREE.Mesh(new THREE.PlaneGeometry(244, 7), new THREE.MeshStandardMaterial({ color: 0x74cdec, roughness: 0.2, metalness: 0.18, transparent: true, opacity: 0.85 }));
     shallow.rotation.x = -Math.PI / 2; shallow.position.set(0, 0.075, -23.5); scene.add(shallow); this.nileShallow = shallow;
+    // blocky papyrus reeds clustered along the near bank
+    const reeds = new THREE.Group();
+    for (let i = 0; i < 24; i++) {
+      const clump = new THREE.Group(), n = 2 + (Math.random() * 3 | 0);
+      for (let j = 0; j < n; j++) {
+        const h = 1.0 + Math.random() * 0.9, st = new THREE.Mesh(new THREE.BoxGeometry(0.09, h, 0.09), this._mat(0x6fa83a));
+        st.position.set((Math.random() - 0.5) * 0.5, h / 2, (Math.random() - 0.5) * 0.5); st.castShadow = true; clump.add(st);
+        const tuft = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.22), this._mat(0x9a7a38)); tuft.position.set(st.position.x, h, st.position.z); clump.add(tuft);
+      }
+      clump.position.set((Math.random() - 0.5) * 150, 0, -22 - Math.random() * 2.5); reeds.add(clump);
+    }
+    scene.add(reeds);
 
     // groups
     this.gridGroup = new THREE.Group(); scene.add(this.gridGroup);   // buildable tile lattice
@@ -303,18 +315,17 @@ export class Renderer {
     return g;
   }
   _grass() { const g = new THREE.Group(); for (let i = 0; i < 4; i++) { const b = this._box(0.07, 0.4 + Math.random() * 0.25, 0.07, i % 2 ? 0x7ab93f : 0x6aa634, 0); b.position.set((Math.random() - 0.5) * 0.45, 0.22, (Math.random() - 0.5) * 0.45); b.rotation.z = (Math.random() - 0.5) * 0.4; g.add(b); } return g; }
-  _rockDecor() { const g = new THREE.Group(); const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.4 + Math.random() * 0.3, 0), this._mat(0xc6b083)); m.position.y = 0.28; m.castShadow = true; g.add(m); return g; }
+  _rockDecor() { const g = new THREE.Group(); const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.4 + Math.random() * 0.35, 0), this._mat(0xc6b083)); m.position.y = 0.26; m.scale.y = 0.7; m.castShadow = true; g.add(m); if (Math.random() < 0.5) { const m2 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.25, 0), this._mat(0xbfa779)); m2.position.set(0.4, 0.18, 0.2); m2.scale.y = 0.7; g.add(m2); } return g; }
+  // sparse desert rocks only — no trees/animals (clean, realistic desert)
   _buildDecor(state) {
     const key = state.wonderIndex + ""; if (this._decorKey === key) return; this._decorKey = key;
     while (this.decorGroup.children.length) this.decorGroup.remove(this.decorGroup.children[0]);
     const B = wonderGeom(state.wonderIndex).base, off = (B - 1) / 2;
-    const place = (mk, wx, wz) => { const o = mk(); o.position.set(wx, 0, wz); o.rotation.y = Math.random() * TAU; o.scale.multiplyScalar(0.8 + Math.random() * 0.7); this.decorGroup.add(o); };
-    for (let i = 0; i < 30; i++) {
-      const a = i / 30 * TAU + Math.random() * 0.18, rad = off + 15 + Math.random() * 14;
+    for (let i = 0; i < 18; i++) {
+      const a = i / 18 * TAU + Math.random() * 0.3, rad = off + 16 + Math.random() * 13;
       const wx = Math.cos(a) * rad, wz = Math.sin(a) * rad * 0.85 + 2; if (wz < -off - 10) continue; // keep off the Nile
-      const r = Math.random(); place(r < 0.4 ? () => this._palm() : r < 0.75 ? () => this._grass() : () => this._rockDecor(), wx, wz);
+      const o = this._rockDecor(); o.position.set(wx, 0, wz); o.rotation.y = Math.random() * TAU; o.scale.multiplyScalar(0.8 + Math.random() * 0.8); this.decorGroup.add(o);
     }
-    for (let i = 0; i < 8; i++) place(() => this._palm(), (Math.random() - 0.5) * 72, -off - 13 - Math.random() * 3); // palms on the Nile bank
   }
   _rebuildLayout(state) {
     this._buildGrid(state);
@@ -735,14 +746,13 @@ export class Renderer {
     this.scene.fog.color.setHex(sk.bot);
     this.hemi.intensity = 0.5 + sk.amb * 0.45; this.sun.color.setHex(sk.sun); this.sun.intensity = 1.05 + sk.amb * 1.15; // punchy key light
     const sa = phase * TAU; this.sun.position.set(Math.cos(sa) * 60, 42 + Math.sin(sa) * 40, 34); this.sun.target.position.set(0, 0, 0);
+    if (this.nileShallow) { this.nileShallow.material.opacity = 0.62 + Math.sin(state.clock * 1.6) * 0.16; this.nileShallow.position.x = Math.sin(state.clock * 0.4) * 0.6; } // water shimmer
 
     this._updateCamera(vw, vh, state);
     this._updatePyramid(state);
     this._updateWorkers(state, stats, dt);
     this._updateSupply(state, stats, dt);
     this._updateGatherers(state, stats, dt);
-    this._updateNodes(dt);
-    this._updateAnimals(state, stats, dt);
     this._updatePlops(dt);
     this._updateFx(dt);
 

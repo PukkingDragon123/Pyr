@@ -93,7 +93,7 @@ export const STR = {
 
   newDynasty: "New Dynasty",
   dynasty: (n) => `Dynasty ${n}`,
-  startTip: "Buy a Quarry, hire a Laborer — then watch your workers build.",
+  startTip: "Tap an empty tile to build · Tap a building to upgrade · Hire crew from the menu",
   unlocked: (n) => `Unlocked: ${n}`,
   dynastyToast: (n) => `A new dynasty begins — ${n}`,
 

@@ -1,12 +1,11 @@
 # 🔺 Build the Pyramid
 
-A **low-poly 3D city-builder** set in Ancient Egypt. You are the Pharaoh: pitch
-**worker camps** across a procedural desert, **tap the trees, stone, water and
-fields** to send your crews out gathering, and watch your pyramid rise — it is
-**never a progress bar**, but physically built **brick by brick** by animated
-workers hauling stone up the ramp, with **oxen, elephants and crocodiles**
-roaming the site. Finish it, raise the golden capstone, then found a new dynasty
-and build a greater one.
+A **low-poly 3D city-builder** set in Ancient Egypt. Start from an empty desert:
+tap tiles to place **worker camps** that produce your resources, **upgrade** each
+building through tiers, and watch your pyramid rise — it is **never a progress
+bar**, but physically built **brick by brick** by animated workers hauling stone
+up the ramp. Finish it, raise the golden capstone, then found a new dynasty and
+build a greater one.
 
 Relaxing to play, on desktop, mobile (touch), or with a gamepad.
 
@@ -14,12 +13,12 @@ Relaxing to play, on desktop, mobile (touch), or with a gamepad.
 
 ## ▶ Play
 
-**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=13**
+**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=14**
 
 (Served straight from this branch via raw.githack.com — bump the `?v=` number to bust the cache after updates.)
 
-A short **tutorial** walks new pharaohs through the first quarry, the first
-crew, and the whip.
+A short on-screen hint shows the two things you do: **tap an empty tile to
+build**, and **tap a building to upgrade** it.
 
 ## How to play
 
@@ -38,10 +37,9 @@ polished, colourful mobile-game UI:
   its upgrade panel: see what it produces now, the next tier's output, and the
   cost. Each level multiplies that building's output (and it grows + gets a gold
   ring). Five tiers per building.
-- **Every resource is made by a building** — quarries, **sand pits**, lumber,
-  farms, wells and mines are little tented **camps** whose labourers do the work
-  (walking to nearby trees/stone/dunes/ore, or working the camp in place). No
-  tapping to gather — you build and upgrade producers.
+- **Every resource is made by a building** — quarries, lumber, farms, wells and
+  mines are little tented **camps** whose labourers do the work. Each resource
+  chip shows a **storage bar** so you can see how full it is.
 - **Watch the real supply line** — sled teams **drag rough stone** from the
   quarry to a **cutting yard**, where a stonecutter **chisels solid rock into a
   dressed brick** (chips fly, the block changes shape). Laborers then carry the
@@ -49,10 +47,9 @@ polished, colourful mobile-game UI:
   teleporting. More laborers and faster machines = a faster build.
 - **Click a worker on the pyramid to crack the whip** — they sprint and everyone
   builds faster for a few seconds.
-- **Limestone** is the building material; if you run short, build more quarries
-  (or tap the stone nodes).
-- A real **desert world** grows around you: the **Nile**, a **worker village &
-  camps**, fields by the river, oxen, elephants and crocodiles.
+- **Limestone** is the building material; if you run short, build more quarries.
+- A calm **desert world**: the **Nile** with papyrus reeds, your **worker
+  village & camps**, and the rising pyramid.
 - Finish every layer to raise the **golden capstone**, then **found a New
   Dynasty** to keep your Legacy and build the next, greater wonder.
 
@@ -119,30 +116,22 @@ tools/              # make_card_art.py (deploy art), test_sim.mjs, smoke.mjs, cl
   city buildings are placed (and validated for adjacency) on the grid. The
   economy keeps building *counts* authoritative, so placement is a layer over
   the same tested simulation.
-- **Polished Clash-of-Clans UI** — warm glossy rounded panels with soft layered
-  depth shadows, juicy gradient buttons with a springy press, bright coin-style
-  resource counters, a clean rounded build-sheet, and vibrant cinematic lighting
-  with scattered palms and greenery. Pure CSS + Three.js over the same DOM/scene.
-- **Procedural resource map** — trees, stone, ore, crops and water nodes are
-  placed deterministically from the dynasty seed (its own RNG stream, so saves
-  stay stable). Resource buildings render as **worker camps** whose labourers
-  walk out to the nearest matching node (trees, stone, sand dunes, ore), work
-  it, and carry the resource home — or tend the camp in place when there's no
-  node (wells, farms). Sand is a full resource, dug by a Sand Pit.
+- **Polished, simple mobile UI** — warm glossy rounded panels with soft layered
+  depth shadows, juicy gradient buttons with a springy press, coin-style resource
+  counters with a **storage fill bar**, a clean rounded build-sheet and upgrade
+  panel. No tutorial clutter — just a one-line hint. Pure CSS + Three.js.
 - **A real construction supply line:** sled teams drag rough stone from the
   quarry to a cutting yard; a stonecutter shapes **solid rock → dressed brick**
   (the mesh visibly changes, chips fly, a brick pile grows); masons carry the
   finished bricks up the ramp (smoothstep-eased climb) and set them in place.
-- **Workers you can count** — the crew on the pyramid is rendered to your actual
-  builder count (you start with none and *see* every laborer you hire). Every
-  human and animal has little **black dot eyes**, hands, feet and a belt; oxen
-  and elephants have ears and tails. Animation is fluid: idle breathing, head
-  bob, springy (damped) arm follow-through, tail/ear sway.
-- **Animated crews & animals** are procedural low-poly models with gait bounce;
-  oxen, elephants and crocodiles roam smooth looped paths (no path-finding, so
-  nothing ever gets stuck). Buildings are detailed but blocky — mud-brick houses
-  with parapets and roof-beams, four-silo granaries, columned temples, market
-  stalls. Dust, chips and ground rings are pooled.
+- **Workers you can count** — the crew is rendered to your actual builder count
+  (you start with none and *see* every laborer you hire). Each worker has little
+  **black dot eyes**, hands, feet and a belt; animation is fluid — idle
+  breathing, head bob, springy (damped) arm follow-through.
+- **Detailed-but-blocky models** — mud-brick houses with parapets and roof-beams,
+  four-silo granaries, columned temples, market stalls; a layered **Nile** with
+  papyrus reeds and a shimmering shallows; sparse desert rocks. Dust, chips and
+  ground rings are pooled. (No wandering animals — kept clean and calm.)
 - **Performance:** instanced pyramid (one draw call), pooled FX, pixel-ratio
   capped at 1.5. Fixed-timestep sim with a seeded RNG; logic fully separate from
   rendering, so the simulation is deterministic and testable headless.

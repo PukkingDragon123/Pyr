@@ -43,9 +43,9 @@ export class UI {
     this.resBar = el("div", "resbar");
     this.resChips = {};
     for (const k of RES) {
-      const chip = el("div", "chip", `<span class="ic">${icon(k)}</span><span class="v"></span><span class="net"></span>`);
+      const chip = el("div", "chip", `<span class="ic">${icon(k)}</span><span class="cmid"><span class="v"></span><span class="cbar"><span class="cfill"></span></span></span><span class="net"></span>`);
       chip.title = RES_META[k].name;
-      this.resChips[k] = { chip, v: chip.querySelector(".v"), net: chip.querySelector(".net") };
+      this.resChips[k] = { chip, v: chip.querySelector(".v"), net: chip.querySelector(".net"), fill: chip.querySelector(".cfill") };
       this.resBar.appendChild(chip);
     }
     this.legacyChip = el("div", "chip legacy", `<span class="ic">${icon("legacy")}</span><span class="v"></span>`);
@@ -115,41 +115,12 @@ export class UI {
     dock.appendChild(this.list);
     r.appendChild(dock);
 
-    // ---- chronicle ----
-    const chron = el("div", "chron");
-    chron.appendChild(el("div", "chron-h", STR.eventLog));
-    this.logEl = el("div", "log");
-    chron.appendChild(this.logEl);
-    r.appendChild(chron);
-
-    // ---- toaster ----
+    // ---- toaster + simple hint + center popup + floating numbers ----
     this.toaster = el("div", "toaster"); r.appendChild(this.toaster);
-
-    // ---- tip ----
-    this.tip = el("div", "tip", STR.startTip);
-    r.appendChild(this.tip);
-
-    // ---- center reward popup ----
+    this.tip = el("div", "tip", STR.startTip); r.appendChild(this.tip);
+    setTimeout(() => this.tip && this.tip.classList.add("hidden"), 9000);
     this.popupEl = el("div", "popup"); r.appendChild(this.popupEl);
-
-    // ---- floating +resource numbers (tap-to-harvest feedback) ----
     this.floatLayer = el("div", "floatlayer"); r.appendChild(this.floatLayer);
-
-    // ---- Pharaoh guide + quest panel ----
-    this.questEl = el("div", "quest");
-    this.questEl.innerHTML = `<div class="ph-portrait">${icon("pharaoh")}</div>
-      <div class="q-main"><div class="q-head">${STR.pharaohName}</div><div class="q-text"></div>
-      <div class="q-foot"><span class="q-prog"></span><span class="q-reward"></span></div></div>`;
-    this.qText = this.questEl.querySelector(".q-text");
-    this.qProg = this.questEl.querySelector(".q-prog");
-    this.qReward = this.questEl.querySelector(".q-reward");
-    r.appendChild(this.questEl);
-
-    // ---- Pharaoh speech bubble ----
-    this.speechEl = el("div", "speech hidden");
-    this.speechEl.innerHTML = `<div class="ph-portrait big">${icon("pharaoh")}</div><div class="sp-text"></div>`;
-    this.spText = this.speechEl.querySelector(".sp-text");
-    r.appendChild(this.speechEl);
 
     // ---- build picker (tap an empty tile) + upgrade panel (tap a building) ----
     this.pickerEl = el("div", "picker hidden");
@@ -272,31 +243,7 @@ export class UI {
   }
 
   // ---- Pharaoh quest panel + tab highlight ----
-  _updateQuest(state) {
-    const q = questFor(state);
-    if (this._questText !== q.text) {
-      this._questText = q.text; this.qText.textContent = q.text;
-      this._clearGlow();
-      if (q.tab && this.tabBtns[q.tab]) this._glow(this.tabBtns[q.tab]);
-    }
-    const p = q.prog ? q.prog(state) : null;
-    this.qProg.textContent = p ? `${fmt(p.cur)}/${fmt(p.max)}` : "";
-    let rw = "";
-    if (q.reward) {
-      if (q.reward.legacy) rw = `+${q.reward.legacy} ${STR.legacy}`;
-      else if (q.reward.res) { const k = Object.keys(q.reward.res)[0]; rw = `+${fmt(q.reward.res[k])} ${RES_META[k].name}`; }
-    }
-    this.qReward.textContent = rw ? STR.reward + " " + rw : "";
-  }
-  _glow(elm) { if (elm) elm.classList.add("tut-glow"); this._glowed = elm; }
-  _clearGlow() { if (this._glowed) this._glowed.classList.remove("tut-glow"); this._glowed = null; }
-
-  pharaohSpeak(text) {
-    this.spText.textContent = text;
-    this.speechEl.classList.remove("hidden"); this.speechEl.classList.add("show");
-    clearTimeout(this._speechT);
-    this._speechT = setTimeout(() => { this.speechEl.classList.remove("show"); setTimeout(() => this.speechEl.classList.add("hidden"), 350); }, 4200);
-  }
+  pharaohSpeak() { /* tutorial removed — kept as a no-op so callers stay safe */ }
 
   _buildModals() {
     this.modalWrap = el("div", "modalwrap hidden");
@@ -489,6 +436,7 @@ export class UI {
       ref.net.textContent = full ? STR.res.full : (net >= 0 ? "+" : "") + fmt(net) + STR.res.perSec;
       ref.net.className = "net " + (full ? "full" : net >= -1e-6 ? "up" : "down");
       ref.chip.classList.toggle("isfull", full);
+      if (ref.fill) { const frac = Number.isFinite(cap) && cap > 0 ? Math.max(0, Math.min(1, state.res[k] / cap)) : 0; ref.fill.style.width = (frac * 100).toFixed(0) + "%"; ref.fill.className = "cfill" + (full ? " full" : ""); }
       ref.chip.title = RES_META[k].name + " · " + fmt(Math.floor(state.res[k])) + " / " + fmt(cap);
     }
     this.legacyV.textContent = fmt(state.legacy);
@@ -522,10 +470,7 @@ export class UI {
     this._banner(state, stats);
     this._rebuildList(state, stats);
     this._refreshList(state, stats);
-    this._log(state);
     this._updateLevel(state);
-    this._updateQuest(state);
-    this.tip.classList.add("hidden");
   }
 
   _banner(state, stats) {
@@ -542,15 +487,5 @@ export class UI {
       return;
     }
     this.banner.classList.add("hidden");
-  }
-
-  _log(state) {
-    const sig = state.log.length ? state.log[0].t + state.log[0].text : "";
-    if (sig === this._logSig) return;
-    this._logSig = sig;
-    this.logEl.innerHTML = "";
-    for (const e of state.log.slice(0, 14)) {
-      this.logEl.appendChild(el("div", "logline " + (e.kind || ""), `<span class="lt">${fmtTime(e.t)}</span> ${e.text}`));
-    }
   }
 }

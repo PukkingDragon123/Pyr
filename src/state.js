@@ -24,7 +24,7 @@ export const SAVE_VERSION = 1;
 
 // Start from absolute zero — no prebuilt camps or crew. Just enough resources
 // in the granary to lay your first few buildings and hire your first laborers.
-const STARTER_RES = { limestone: 130, sand: 30, granite: 0, wood: 60, copper: 0, food: 60, water: 45 };
+const STARTER_RES = { limestone: 130, granite: 0, wood: 60, copper: 0, food: 60, water: 45 };
 const STARTER_BUILDINGS = {};
 const STARTER_WORKERS = {};
 
