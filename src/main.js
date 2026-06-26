@@ -5,6 +5,7 @@ import { BUILDINGS, WORKERS, BLESSINGS, AUTOSAVE_MS, wonderFor } from "./data.js
 import {
   step, computeStats, buyBuilding, buyWorker, buyBlessing,
   doPrestige, legacyGain, isUnlocked, freshlyUnlocked, simulateOffline, whip, harvestNode, placeBuilding,
+  placementAt, upgradeBuilding,
 } from "./sim.js";
 import { load, save, wipe, exportSave, importSave } from "./save.js";
 import { newGame } from "./state.js";
@@ -67,13 +68,18 @@ const app = {
     if (ok) { audio.play("buy"); renderer.plopAt(gx, gz); }
     return ok;
   },
-  // A tap on the world: empty buildable tile → build picker; otherwise crack
-  // the whip. (Resources are gathered by your workers/camps, not by tapping.)
+  // place a building on a grid tile
+  upgrade: (id) => { const ok = upgradeBuilding(state, id); if (ok) audio.play("buy"); return ok; },
+  // A tap on the world: empty tile → build picker; a placed building → upgrade
+  // panel; otherwise crack the whip. (Workers/camps gather; no tap-to-gather.)
   tap: (x, y) => {
     ensureAudio();
     const tile = renderer.tileAt(x, y);
-    if (tile && !tile.occupied) { ui.openBuildPicker(tile.gx, tile.gz); return; }
-    ui.closeBuildPicker();
+    if (tile) {
+      if (tile.occupied) { const p = placementAt(state, tile.gx, tile.gz); if (p) { ui.openUpgrade(p.id); return; } }
+      else { ui.openBuildPicker(tile.gx, tile.gz); return; }
+    }
+    ui.closePanels();
     whip(state); renderer.whipAt(x, y); ui.popup(STR.whipGo, "go");
   },
   toggleMute: (m) => { state.settings.muted = m; audio.setMuted(m); },

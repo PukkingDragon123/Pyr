@@ -4,10 +4,10 @@ import { STR } from "../strings.js";
 import {
   RES, RES_META, BUILDINGS, WORKERS, BLESSINGS,
   WEATHER, wonderFor, wonderGeom, blocksForLayer, UNLOCK_LEVEL, xpInfo, questFor,
-  PLACEABLE, ADJ_REQ, ADJ_LABEL,
+  PLACEABLE, ADJ_REQ, ADJ_LABEL, MAX_TIER, TIER_MULT,
 } from "./data.js";
 import { costFor, canAfford, resolveQty } from "./state.js";
-import { isUnlocked, blessingCost, getLevel, placeReason } from "./sim.js";
+import { isUnlocked, blessingCost, getLevel, placeReason, buildingTier, canUpgrade, upgradeCostFor } from "./sim.js";
 import { icon } from "./icons.js";
 import { fmt, fmtInt, fmtTime } from "./format.js";
 
@@ -151,9 +151,11 @@ export class UI {
     this.spText = this.speechEl.querySelector(".sp-text");
     r.appendChild(this.speechEl);
 
-    // ---- build picker (opens when you tap an empty tile) ----
+    // ---- build picker (tap an empty tile) + upgrade panel (tap a building) ----
     this.pickerEl = el("div", "picker hidden");
     r.appendChild(this.pickerEl);
+    this.upgradeEl = el("div", "upgrade hidden");
+    r.appendChild(this.upgradeEl);
 
     // ---- modals ----
     this._buildModals();
@@ -161,8 +163,25 @@ export class UI {
     this._syncQty();
   }
 
+  // --- building info helpers ---
+  _catLabel(d) { return d.cat === "resource" ? STR.typeProducer : d.cat === "city" ? STR.typeCivic : d.cat === "machine" ? STR.typeMachine : d.cat; }
+  _defIcon(d) { const p = d.effect.produce && Object.keys(d.effect.produce)[0]; return p ? p : d.cat === "machine" ? "transport" : "city"; }
+  _effectText(d, mult = 1) {
+    const e = d.effect, parts = [];
+    if (e.produce) for (const k in e.produce) parts.push(`+${fmt(e.produce[k] * mult)} ${RES_META[k].name}/s`);
+    if (e.buildSpeed) parts.push(`+${Math.round(e.buildSpeed * mult * 100)}% build`);
+    if (e.prodAll) parts.push(`+${Math.round(e.prodAll * mult * 100)}% all output`);
+    if (e.cap) parts.push(STR.addsStorage);
+    return parts.join(" · ") || "—";
+  }
+  _costChips(state, cost) {
+    let s = ""; for (const rk in cost) s += `<span class="costchip ${state.res[rk] >= cost[rk] - 1e-6 ? "" : "no"}"><span class="ic">${icon(rk)}</span>${fmt(cost[rk])}</span>`;
+    return s;
+  }
+
   // tap an empty tile → choose a building to place there
   openBuildPicker(gx, gz) {
+    this.closeUpgrade();
     this._pickTile = { gx, gz };
     const state = this.app.getState();
     this.pickerEl.innerHTML = "";
@@ -177,16 +196,15 @@ export class UI {
       const reason = placeReason(state, id, gx, gz);
       if (reason === "no") continue;
       const owned = state.buildings[id] || 0;
-      const cost = costFor(d, owned, 1);
       const it = el("button", "pk-item");
       let note = "";
-      if (reason === "locked") note = `<span class="pk-lock">${STR.locked} ${STR.level} ${UNLOCK_LEVEL[id] || 1}</span>`;
-      else if (reason === "adjacency") note = `<span class="pk-req">${STR.needsNear(ADJ_LABEL[ADJ_REQ[id]] || ADJ_REQ[id])}</span>`;
-      let chips = "";
-      for (const rk in cost) chips += `<span class="costchip ${state.res[rk] >= cost[rk] - 1e-6 ? "" : "no"}"><span class="ic">${icon(rk)}</span>${fmt(cost[rk])}</span>`;
-      it.innerHTML = `<span class="pk-ic">${icon(d.cat === "resource" ? "resource" : "city")}</span>
-        <span class="pk-main"><span class="pk-name">${d.name} <span class="cnt">${owned}</span></span>
-        <span class="pk-cost">${chips}</span>${note}</span>`;
+      if (reason === "locked") note = `<span class="pk-lock">🔒 ${STR.level} ${UNLOCK_LEVEL[id] || 1}</span>`;
+      else if (reason === "adjacency") note = `<span class="pk-req">⚲ ${STR.needsNear(ADJ_LABEL[ADJ_REQ[id]] || ADJ_REQ[id])}</span>`;
+      it.innerHTML = `<span class="pk-ic">${icon(this._defIcon(d))}</span>
+        <span class="pk-main">
+          <span class="pk-name">${d.name}${owned ? ` <span class="cnt">×${owned}</span>` : ""}<span class="pk-type">${this._catLabel(d)}</span></span>
+          <span class="pk-eff">${this._effectText(d)}</span>
+          <span class="pk-cost">${this._costChips(state, costFor(d, owned, 1))}</span>${note}</span>`;
       if (reason !== "") it.classList.add("disabled");
       it.onclick = () => {
         if (this.app.place(id, gx, gz)) this.closeBuildPicker();
@@ -198,6 +216,36 @@ export class UI {
     this.pickerEl.classList.remove("hidden");
   }
   closeBuildPicker() { this.pickerEl.classList.add("hidden"); this._pickTile = null; }
+
+  // tap a placed building → upgrade it through tiers
+  openUpgrade(id) {
+    this.closeBuildPicker();
+    this._upId = id;
+    const state = this.app.getState(), d = BDEF[id]; if (!d) return;
+    const tier = buildingTier(state, id), owned = state.buildings[id] || 0, maxed = tier >= MAX_TIER;
+    const curMul = TIER_MULT[tier - 1] || 1;
+    let pips = ""; for (let i = 1; i <= MAX_TIER; i++) pips += `<span class="up-pip ${i <= tier ? "on" : ""}"></span>`;
+    let body = `<div class="up-head"><span class="pk-ic">${icon(this._defIcon(d))}</span>
+        <div class="up-id"><div class="up-name">${d.name} <span class="up-tier">Lv ${tier}</span></div><div class="up-type">${this._catLabel(d)} · ×${owned}</div></div>
+        <button class="pk-x up-x">✕</button></div>
+      <div class="up-desc">${d.desc || ""}</div>
+      <div class="up-now">${STR.nowProducing}: <b>${this._effectText(d, curMul)}</b></div>
+      <div class="up-pips">${pips}</div>`;
+    if (maxed) body += `<div class="up-max">${STR.maxTier}</div>`;
+    else {
+      const cost = upgradeCostFor(state, id), nextMul = TIER_MULT[tier] || curMul;
+      body += `<div class="up-next">→ Lv ${tier + 1}: <b>${this._effectText(d, nextMul)}</b></div>
+        <div class="up-cost">${this._costChips(state, cost)}</div>
+        <button class="btn primary up-go">${STR.upgrade} (Lv ${tier + 1})</button>`;
+    }
+    this.upgradeEl.innerHTML = body;
+    this.upgradeEl.querySelector(".up-x").onclick = () => this.closeUpgrade();
+    const go = this.upgradeEl.querySelector(".up-go");
+    if (go) go.onclick = () => { if (this.app.upgrade(id)) { this.openUpgrade(id); } else this.toast(STR.cantAfford, "bad"); };
+    this.upgradeEl.classList.remove("hidden");
+  }
+  closeUpgrade() { this.upgradeEl.classList.add("hidden"); this._upId = null; }
+  closePanels() { this.closeBuildPicker(); this.closeUpgrade(); }
 
   popup(text, cls) {
     this.popupEl.textContent = text;

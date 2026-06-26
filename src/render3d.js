@@ -119,13 +119,17 @@ export class Renderer {
 
   // low-contrast 2-tone sand tiles → a Clash-of-Clans style grid underfoot
   _tileTex() {
+    // soft speckled warm sand (the build grid is drawn separately, so no checker)
     const c = document.createElement("canvas"); c.width = c.height = 64;
     const g = c.getContext("2d");
-    g.fillStyle = "#dcb878"; g.fillRect(0, 0, 64, 64);
-    g.fillStyle = "#d3ad6b"; g.fillRect(0, 0, 32, 32); g.fillRect(32, 32, 32, 32);
-    g.strokeStyle = "rgba(120,92,52,0.16)"; g.lineWidth = 2; g.strokeRect(1, 1, 62, 62);
+    g.fillStyle = "#dcbb7d"; g.fillRect(0, 0, 64, 64);
+    for (let i = 0; i < 90; i++) {
+      const x = Math.random() * 64, y = Math.random() * 64, r = Math.random() * 1.5 + 0.3;
+      g.fillStyle = Math.random() < 0.5 ? "rgba(168,134,80,0.22)" : "rgba(236,212,158,0.30)";
+      g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+    }
     const t = new THREE.CanvasTexture(c);
-    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(85, 85);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(55, 55);
     t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
     return t;
   }
@@ -346,16 +350,24 @@ export class Renderer {
       }
     }
     // diff against rendered models
-    for (const k in this.tileModels) if (desired[k] !== this.tileModels[k].id) { this.worldGroup.remove(this.tileModels[k].grp); delete this.tileModels[k]; }
+    for (const k in this.tileModels) if (desired[k] !== this.tileModels[k].id) { const tm = this.tileModels[k]; this.worldGroup.remove(tm.grp); if (tm.ring) this.worldGroup.remove(tm.ring); delete this.tileModels[k]; }
     for (const k in desired) {
       if (this.tileModels[k]) continue;
       const [gx, gz] = k.split(",").map(Number), id = desired[k], sz = SIZE[id] || [1, 1];
       const grp = this._placeModel(id);
       grp.position.set((gx + (sz[0] - 1) / 2) * TILE, 0, (gz + (sz[1] - 1) / 2) * TILE); // footprint centre
       const fs = Math.max(sz[0], sz[1]) > 1 ? Math.max(sz[0], sz[1]) * 0.92 : 1;          // bigger footprint → bigger model
-      this.worldGroup.add(grp); this.tileModels[k] = { id, grp, scale: fs };
+      this.worldGroup.add(grp); this.tileModels[k] = { id, grp, scale: fs, tier: 1, ring: null };
       if (this._layoutReady) { grp.scale.setScalar(0.01); this.plops.push({ grp, t: 0, target: fs }); this.spawnDust(new THREE.Vector3(gx * TILE, 0.3, gz * TILE), 6); this.ring(new THREE.Vector3(gx * TILE, 0.05, gz * TILE), 0xffe0a0); }
       else grp.scale.setScalar(fs);
+    }
+    // reflect upgrade tier: bigger + a gold base ring on tier ≥ 2
+    for (const k in this.tileModels) {
+      const tm = this.tileModels[k], tier = (state.tier && state.tier[tm.id]) || 1;
+      if (tm.tier === tier) continue;
+      tm.tier = tier; tm.grp.scale.setScalar(tm.scale * (1 + (tier - 1) * 0.07));
+      if (!tm.ring && tier >= 2) { const r = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.82, 22), new THREE.MeshBasicMaterial({ color: 0xf6ce5a, transparent: true, side: THREE.DoubleSide, depthWrite: false })); r.rotation.x = -Math.PI / 2; r.position.copy(tm.grp.position).setY(0.07); this.worldGroup.add(r); tm.ring = r; }
+      if (tm.ring) tm.ring.material.opacity = Math.min(0.85, 0.18 + tier * 0.14);
     }
     this._occupied = occ;
     // machines stay at the ramp zone (not tiled)
@@ -714,7 +726,6 @@ export class Renderer {
   frame(state, stats, dt, vw, vh) {
     this._resize(vw, vh);
     this._buildPyramid(state);
-    this._buildNodes(state);
     this._rebuildLayout(state);
     this._buildSupply(state);
 

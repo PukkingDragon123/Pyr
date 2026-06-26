@@ -60,6 +60,7 @@ function freshDynasty(state) {
   state.res = res;
   state.buildings = buildings;
   state.workers = workers;
+  state.tier = {};              // per-building-type upgrade level (1 = default)
   seedPlacements(state);        // tile placements {id,gx,gz}; building counts stay authoritative
   state.layer = 0;
   state.blocksInLayer = 0;

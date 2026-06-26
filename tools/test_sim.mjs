@@ -3,7 +3,7 @@ import { newGame, costFor, capsFor } from "../src/state.js";
 import {
   step, computeStats, buyBuilding, buyWorker, buyBlessing,
   doPrestige, legacyGain, simulateOffline, isUnlocked, whip, harvestNode,
-  placeBuilding, placeReason,
+  placeBuilding, placeReason, upgradeBuilding, buildingTier, canUpgrade,
 } from "../src/sim.js";
 import { wonderGeom, blocksForLayer, wonderFor, FIRST_WONDER_TOTAL, BUILDINGS, WORKERS, genNodes } from "../src/data.js";
 import { fmt, fmtTime } from "../src/format.js";
@@ -56,6 +56,15 @@ ok(placeBuilding(sp, "well", 8, 10), "well placed on an empty tile");
 ok(placeBuilding(sp, "farm", 7, 10), "farm places next to the well");
 ok(!placeBuilding(sp, "well", 8, 10), "cannot stack on an occupied tile");
 ok(sp.buildings.farm >= 1 && sp.buildings.well >= 1, "placement increments building counts");
+
+// upgrade tiers raise output
+const su = newGame(); su.res.limestone = 1e6; su.res.wood = 1e6;
+placeBuilding(su, "quarry", 8, 10);
+const t1 = computeStats(su).prod.limestone;
+ok(buildingTier(su, "quarry") === 1 && canUpgrade(su, "quarry"), "quarry starts at tier 1, upgradable");
+ok(upgradeBuilding(su, "quarry"), "quarry upgrades to tier 2");
+ok(buildingTier(su, "quarry") === 2, "tier advanced");
+ok(computeStats(su).prod.limestone > t1 * 1.8, "tier 2 boosts output: " + fmt(t1) + " -> " + fmt(computeStats(su).prod.limestone));
 
 // cost scaling
 const c1 = costFor(BUILDINGS[0], 0, 1), c10 = costFor(BUILDINGS[0], 0, 10);

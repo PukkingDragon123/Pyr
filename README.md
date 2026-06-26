@@ -14,7 +14,7 @@ Relaxing to play, on desktop, mobile (touch), or with a gamepad.
 
 ## ▶ Play
 
-**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=12**
+**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=13**
 
 (Served straight from this branch via raw.githack.com — bump the `?v=` number to bust the cache after updates.)
 
@@ -28,15 +28,20 @@ polished, colourful mobile-game UI:
 
 - **Start from an empty plot** — nothing is prebuilt. You begin with a little
   stone and grain and raise *everything* yourself.
-- **Tap an empty tile to build** — tap a free tile and a picker shows what you
-  can raise there. Buildings snap **tile-to-tile** and come in **different shapes
-  and sizes** (a Temple covers 2×2 tiles, a Market or Granary 2×1). Some need a
-  neighbour: a **Nile Farm next to a Water Well**, a **Granary next to a Farm**,
-  **mines next to a Quarry**, a **Market next to a Village**. Plan your village.
-- **Build worker camps** — quarries, **sand pits**, lumber, farms, wells and
-  mines are little tented **camps**. Each sends labourers out to the trees,
-  stone, sand dunes and ore nearby (or works the camp in place) and steadily
-  stockpiles its resource — **no tapping to gather**, your workers do it.
+- **Tap an empty tile to build** — a picker shows every building with its
+  **type**, **what it does/produces**, and cost. Buildings snap **tile-to-tile**
+  and come in **different shapes and sizes** (a Temple covers 2×2 tiles, a Market
+  or Granary 2×1). Some need a neighbour: a **Nile Farm next to a Water Well**, a
+  **Granary next to a Farm**, **mines next to a Quarry**, a **Market next to a
+  Village**.
+- **Upgrade everything (Clash-of-Clans tiers)** — tap a placed building to open
+  its upgrade panel: see what it produces now, the next tier's output, and the
+  cost. Each level multiplies that building's output (and it grows + gets a gold
+  ring). Five tiers per building.
+- **Every resource is made by a building** — quarries, **sand pits**, lumber,
+  farms, wells and mines are little tented **camps** whose labourers do the work
+  (walking to nearby trees/stone/dunes/ore, or working the camp in place). No
+  tapping to gather — you build and upgrade producers.
 - **Watch the real supply line** — sled teams **drag rough stone** from the
   quarry to a **cutting yard**, where a stonecutter **chisels solid rock into a
   dressed brick** (chips fly, the block changes shape). Laborers then carry the

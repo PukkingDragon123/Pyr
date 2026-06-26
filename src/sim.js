@@ -5,7 +5,7 @@ import {
   LIMESTONE_PER_BLOCK, PER_BUILDER, wonderGeom, blocksForLayer, wonderFor,
   FIRST_WONDER_TOTAL, BASE_CAPS, OFFLINE_CAP_S, OFFLINE_RATE,
   UNLOCK_LEVEL, levelForXp, questFor, HARVEST_BASE, PLACEABLE, ADJ_REQ,
-  footprintCells, buildableTiles,
+  footprintCells, buildableTiles, MAX_TIER, TIER_MULT, upgradeCost,
 } from "./data.js";
 import {
   costFor, canAfford, spend, capsFor, clampResources, resolveQty,
@@ -38,12 +38,14 @@ export function computeStats(s) {
   }
   builders += blessVal(s, "great_gangs"); // +2 per level
 
+  const tier = s.tier || {};
   const prod = {}, caps = {}; for (const k of RES) { prod[k] = 0; caps[k] = BASE_CAPS[k] * (1 + 0.4 * (s.blessings.royal_treasury || 0)); }
   for (const b of BUILDINGS) {
     const n = bc[b.id] || 0; if (!n) continue; const e = b.effect;
-    if (e.buildSpeed) buildSpeed += e.buildSpeed * n;
-    if (e.prodAll) prodAllAcc += e.prodAll * n;
-    if (e.produce) for (const k in e.produce) prod[k] += e.produce[k] * n;
+    const m = TIER_MULT[(tier[b.id] || 1) - 1] || 1;   // upgrade-tier output multiplier
+    if (e.buildSpeed) buildSpeed += e.buildSpeed * n * m;
+    if (e.prodAll) prodAllAcc += e.prodAll * n * m;
+    if (e.produce) for (const k in e.produce) prod[k] += e.produce[k] * n * m;
     if (e.cap) for (const k in e.cap) caps[k] += e.cap[k] * n;
   }
 
@@ -215,6 +217,25 @@ export function placeBuilding(s, id, gx, gz) {
   if (!s.placements) s.placements = [];
   s.placements.push({ id, gx, gz });
   return true;
+}
+
+// ---- upgrade tiers (tap a placed building to level it up) -----------------
+export function buildingTier(s, id) { return (s.tier && s.tier[id]) || 1; }
+export function canUpgrade(s, id) { return (s.buildings[id] || 0) > 0 && buildingTier(s, id) < MAX_TIER; }
+export function upgradeCostFor(s, id) { return upgradeCost(B[id], buildingTier(s, id)); }
+export function tierMult(s, id) { return TIER_MULT[buildingTier(s, id) - 1] || 1; }
+export function upgradeBuilding(s, id) {
+  if (!canUpgrade(s, id)) return false;
+  const c = upgradeCostFor(s, id);
+  if (!canAfford(s.res, c)) return false;
+  spend(s.res, c); if (!s.tier) s.tier = {};
+  s.tier[id] = buildingTier(s, id) + 1;
+  return true;
+}
+// which placement (if any) covers tile (gx,gz)
+export function placementAt(s, gx, gz) {
+  for (const p of s.placements || []) for (const [x, z] of footprintCells(p.id, p.gx, p.gz)) if (x === gx && z === gz) return p;
+  return null;
 }
 
 export function buyWorker(s, id) {

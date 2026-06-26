@@ -169,6 +169,19 @@ export function footprintCells(id, gx, gz) {
 }
 
 // ----------------------------------------------------------------------------
+// Building upgrade tiers (Clash-of-Clans style): each building TYPE has a level
+// 1..MAX_TIER; output is multiplied by TIER_MULT[level-1]. Upgrading costs more
+// of the building's own resources at each step.
+// ----------------------------------------------------------------------------
+export const MAX_TIER = 5;
+export const TIER_MULT = [1, 2.2, 4.6, 9.5, 19];
+export function upgradeCost(def, tier) {           // cost to go from `tier` → tier+1
+  const f = Math.pow(3.4, tier), out = {};
+  for (const k in def.cost) out[k] = Math.ceil(def.cost[k] * 3 * f);
+  return out;
+}
+
+// ----------------------------------------------------------------------------
 // Workers. effect keys: builders (haulers added), buildSpeed, prodAll.
 // ----------------------------------------------------------------------------
 export const WORKERS = [

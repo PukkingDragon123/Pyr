@@ -329,4 +329,28 @@ svg.ic{width:1.15em;height:1.15em;vertical-align:-.18em;flex:0 0 auto}
 .pk-cost .costchip{font-size:10.5px;padding:1px 6px}
 .pk-req{font-size:10.5px;color:var(--warn);font-weight:700}
 .pk-lock{font-size:10.5px;color:var(--bad);font-weight:700}
+.pk-type{font-size:9.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:#0f2a0c;background:var(--green);border-radius:999px;padding:1px 6px;margin-left:4px;vertical-align:middle}
+.pk-item.disabled .pk-type{background:#7c7c7c;color:#1a1a1a}
+.pk-eff{font-size:11px;color:#bfe6b0;font-weight:700}
 @media (max-width:560px){.picker{bottom:108px}.pk-grid{grid-template-columns:1fr}}
+
+/* ---- upgrade panel (tap a placed building) ---- */
+.upgrade{position:absolute;left:50%;bottom:120px;transform:translateX(-50%);
+  width:min(380px,calc(100vw - 22px));z-index:18;padding:14px 16px 16px;border-radius:var(--r3)}
+.up-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.up-head .pk-ic{width:42px;height:42px}
+.up-id{flex:1;min-width:0}
+.up-name{font-size:16px;font-weight:900;color:var(--text)}
+.up-tier{font-size:12px;color:#0f2a0c;background:var(--gold);border-radius:999px;padding:1px 8px;margin-left:4px;font-weight:900}
+.up-type{font-size:11px;color:var(--dim);font-weight:700}
+.up-x{flex:0 0 auto}
+.up-desc{font-size:12px;color:var(--muted);line-height:1.45;margin-bottom:8px}
+.up-now{font-size:12.5px;color:var(--text);margin-bottom:8px} .up-now b{color:var(--turq)}
+.up-pips{display:flex;gap:5px;margin-bottom:10px}
+.up-pip{flex:1;height:8px;border-radius:3px;background:rgba(0,0,0,.4);box-shadow:inset 0 1px 2px rgba(0,0,0,.5)}
+.up-pip.on{background:linear-gradient(180deg,#ffe39a,#e0a93a);box-shadow:inset 0 1px 0 rgba(255,255,255,.5)}
+.up-next{font-size:12.5px;color:var(--text);margin-bottom:8px} .up-next b{color:var(--green)}
+.up-cost{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.up-go{width:100%;padding:12px;font-size:15px;font-weight:900}
+.up-max{font-size:14px;font-weight:900;color:var(--gold);text-align:center;padding:8px 0 4px}
+@media (max-width:560px){.upgrade{bottom:108px}}
