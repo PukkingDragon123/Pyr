@@ -42,6 +42,9 @@ async function run(label, vp, shot, mobile, seed) {
   await page.goto(BASE, { waitUntil: "networkidle" });
   await page.waitForTimeout(1400);
 
+  // dismiss the title menu (shown on load) so the HUD is interactable
+  const playBtn = await page.$(".menu-btn.play"); if (playBtn) { await playBtn.click(); await page.waitForTimeout(220); }
+
   const info = await page.evaluate(() => ({
     uiKids: document.getElementById("ui")?.children.length || 0,
     canvasW: document.getElementById("c")?.width || 0,

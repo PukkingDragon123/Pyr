@@ -13,12 +13,13 @@ Relaxing to play, on desktop, mobile (touch), or with a gamepad.
 
 ## ▶ Play
 
-**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=17**
+**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=18**
 
 (Served straight from this branch via raw.githack.com — bump the `?v=` number to bust the cache after updates.)
 
-A short on-screen hint shows the two things you do: **tap an empty tile to
-build**, and **tap a building to upgrade** it.
+It opens on a **golden-hour title screen** — a desert hero shot of the pyramid
+with **Play · Settings · Credits** — then a short on-screen hint shows the two
+things you do: **tap an empty tile to build**, and **tap a building to upgrade**.
 
 ## How to play
 
@@ -111,7 +112,7 @@ src/
   ui.js             # DOM HUD / build menus / modals
   icons.js, rng.js, format.js
 design/             # plan.md, thresholds.md, assets.csv
-tools/              # make_card_art.py (deploy art), test_sim.mjs, smoke.mjs, closeup.mjs, shot_v17.mjs
+tools/              # make_card_art.py (deploy art), test_sim.mjs, smoke.mjs, closeup.mjs, shot_v17.mjs, menu_shot.mjs
 ```
 
 ## Tech notes
@@ -151,10 +152,13 @@ tools/              # make_card_art.py (deploy art), test_sim.mjs, smoke.mjs, cl
   and idle variety (workers wipe their brow, stretch, look around) — so the site
   reads as a living crowd, not clones on a treadmill.
 - **Smart workers that run your machines** — buy machines and crews actually
-  **operate them**: teams crank the **rope winch**, push **wooden rollers** under
-  the sleds, **pour water to grease the runners**, work the **crane** to hoist
-  blocks, and run the **elevator** — a whole industrial supply line, faster the
-  more you build.
+  **operate them with real motion**: gangs **heave the rollers and sleds forward**,
+  haul the **rope winch** hand-over-hand, **squat into the elevator pulls**, crank
+  the **crane**, and **pour water to grease the runners** — a whole industrial
+  supply line that speeds up the more you build.
+- **Title screen & credits** — a **golden-hour desert menu** (Play · Settings ·
+  Credits) opens the game; the in-game **≡ Menu** button returns to it. A subtle
+  vignette and softer shadows give the world a more cinematic look.
 - **Deliberate, rewarding building** — masons queue at the ramp foot, **hug a
   dressed block to the chest**, climb the pyramid and walk to the **exact next
   tile**, then bend and set the stone there — the block only appears in that

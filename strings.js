@@ -100,6 +100,18 @@ export const STR = {
   milestone: "Milestone!",
   upgradeDelta: (pct, res) => `+${pct}% ${res}/s`,
 
+  // title / main menu + credits
+  menuTag: "An idle Egyptian megaproject",
+  menuPlay: "Play",
+  menuSettings: "Settings",
+  menuCredits: "Credits",
+  menuBtn: "Menu",
+  creditsTitle: "Credits",
+  creditsMade: "Made by Pukking Dragon",
+  creditsItch: "Find more games on itch.io",
+  creditsTech: "Vanilla JavaScript · Three.js · art & audio generated procedurally at runtime.",
+  creditsThanks: "Thank you for playing.",
+
   whip: "Crack the Whip!",
   whipGo: "FASTER!",
   whipCd: (s) => `Whip · ${s}s`,

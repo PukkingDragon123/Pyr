@@ -36,6 +36,7 @@ page.on("pageerror", e => errs.push(e.message));
 await page.addInitScript((sv) => localStorage.setItem("btp_save_v1", sv), SAVE);
 await page.goto(process.env.BASE || "http://localhost:8099/", { waitUntil: "networkidle" });
 await page.waitForTimeout(1200);
+{ const pb = await page.$(".menu-btn.play"); if (pb) { await pb.click(); await page.waitForTimeout(200); } }
 const box = await (await page.$("#c")).boundingBox();
 // wide shot: whole site
 for (let i = 0; i < 3; i++) { await page.mouse.move(box.width * 0.45, box.height * 0.5); await page.mouse.wheel(0, -240); await page.waitForTimeout(60); }

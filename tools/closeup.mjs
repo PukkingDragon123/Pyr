@@ -33,6 +33,7 @@ page.on("pageerror", e => errs.push(e.message));
 await page.addInitScript((sv) => localStorage.setItem("btp_save_v1", sv), SAVE);
 await page.goto(process.env.BASE || "http://localhost:8099/", { waitUntil: "networkidle" });
 await page.waitForTimeout(800);
+{ const pb = await page.$(".menu-btn.play"); if (pb) { await pb.click(); await page.waitForTimeout(200); } }
 // moderate zoom so the whole build + workers + animals stay framed and large
 const box = await (await page.$("#c")).boundingBox();
 for (let i = 0; i < 4; i++) { await page.mouse.move(box.width * 0.42, box.height * 0.5); await page.mouse.wheel(0, -260); await page.waitForTimeout(60); }

@@ -353,3 +353,46 @@ body{-webkit-font-smoothing:none}
 .up-go{width:100%;padding:12px;font-size:14px;font-weight:900}
 .up-max{font-size:14px;font-weight:900;color:var(--edge);text-align:center;padding:8px 0 4px}
 @media (max-width:560px){.upgrade{bottom:108px}}
+
+/* ===== title / main menu — golden-hour desert hero ===== */
+.menu-screen{position:fixed;inset:0;z-index:40;pointer-events:auto;overflow:hidden;
+  background:linear-gradient(180deg,#2a1d40 0%,#6b3a52 16%,#b15f37 34%,#e0975a 52%,#f2c277 70%,#f6dca6 100%)}
+.menu-screen.hidden{display:none}
+.menu-screen::before{content:"";position:absolute;left:50%;top:44%;width:min(560px,92vw);height:min(560px,92vw);transform:translate(-50%,-50%);
+  background:radial-gradient(circle,rgba(255,244,214,.96) 0%,rgba(255,214,130,.6) 20%,rgba(255,176,96,.22) 42%,transparent 64%);
+  pointer-events:none;animation:menuSun 6s ease-in-out infinite}
+@keyframes menuSun{0%,100%{opacity:.9;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.05)}}
+.menu-ground{position:absolute;left:0;right:0;bottom:0;height:34%;
+  background:radial-gradient(120% 80% at 22% 130%,rgba(0,0,0,.12),transparent 60%),linear-gradient(180deg,#d9ab66 0%,#c2914f 46%,#a9783a 100%)}
+.menu-pyr{position:absolute;bottom:32%;left:50%;transform:translateX(-50%);width:min(560px,92vw);height:min(340px,56vw);
+  clip-path:polygon(50% 0,100% 100%,0 100%);
+  background:repeating-linear-gradient(180deg,rgba(255,255,255,.05) 0 18px,rgba(0,0,0,.06) 18px 21px),linear-gradient(96deg,#f0d49a 0 50%,#b5813f 50% 100%);
+  filter:drop-shadow(0 6px 0 rgba(60,30,8,.18))}
+.menu-pyr.back{width:min(340px,52vw);height:min(210px,34vw);left:31%;bottom:33%;opacity:.55;
+  background:linear-gradient(96deg,#e6c98e 0 50%,#a9773a 50% 100%)}
+.menu-content{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:space-between;
+  padding:9vh 20px 6vh;pointer-events:none;text-align:center}
+.menu-top,.menu-bottom{pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:12px}
+.menu-title{font:900 clamp(30px,8vw,58px)/1 var(--font);letter-spacing:3px;color:#fff4d8;text-transform:uppercase;
+  text-shadow:4px 4px 0 #7a431a,0 0 22px rgba(60,24,4,.35)}
+.menu-tag{font:700 clamp(12px,3.4vw,16px) var(--font);color:#3a2410;letter-spacing:1px;opacity:.88}
+.menu-btn{font:800 18px var(--font);color:#fff4d8;background:var(--panel2);border:3px solid var(--ink);
+  box-shadow:4px 4px 0 rgba(0,0,0,.45);padding:14px 34px;min-width:240px;max-width:80vw;cursor:pointer;pointer-events:auto;letter-spacing:1px}
+.menu-btn:active{transform:translate(3px,3px);box-shadow:none}
+.menu-btn.play{background:var(--green);color:#0c2208;border-color:#2f6a1e;font-size:20px}
+.menu-credit{pointer-events:auto;font:700 13px var(--font);color:#3a2410}
+.menu-credit a{color:#5a3210;font-weight:800}
+
+/* credits modal */
+.modal.credits{text-align:center}
+.modal .cr-made{font-size:16px;font-weight:800;color:var(--text);margin:.2em 0}
+.modal .cr-itch{display:inline-block;margin:.3em 0 .6em;color:var(--green);font-weight:800;text-decoration:underline}
+.modal .cr-tech{font-size:12px;color:var(--muted);margin:.2em 0;line-height:1.5}
+.modal .cr-thanks{font-size:13px;color:var(--edge);font-weight:800;margin-top:.6em}
+
+/* size chip (build picker card + upgrade header) */
+.sizechip{margin-left:6px;padding:1px 6px;background:var(--panel3);border:2px solid var(--ink);font-size:10.5px;font-weight:800;color:var(--edge)}
+
+/* gameplay vignette — cinematic depth over the 3D scene */
+#vignette{position:fixed;inset:0;pointer-events:none;z-index:3;
+  background:radial-gradient(ellipse at 50% 38%,transparent 50%,rgba(18,9,2,.32) 100%)}

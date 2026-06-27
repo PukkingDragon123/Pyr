@@ -55,7 +55,9 @@ export class UI {
     gear.title = STR.settings; gear.onclick = () => this._openModal("settings");
     const helpBtn = el("button", "iconbtn", "?"); helpBtn.title = STR.help;
     helpBtn.onclick = () => this._openModal("help");
-    top.append(this.brand, this.resBar, this.legacyChip, helpBtn, gear);
+    const menuBtn = el("button", "iconbtn", "≡"); menuBtn.title = STR.menuBtn;
+    menuBtn.onclick = () => this.openMenu();
+    top.append(this.brand, this.resBar, this.legacyChip, menuBtn, helpBtn, gear);
     r.appendChild(top);
 
     // ---- status (level + goal + build + weather) ----
@@ -128,10 +130,41 @@ export class UI {
     this.upgradeEl = el("div", "upgrade hidden");
     r.appendChild(this.upgradeEl);
 
-    // ---- modals ----
+    // ---- modals + title menu ----
     this._buildModals();
+    this._buildMenu();
     this._setTab("crew");
     this._syncQty();
+    this.openMenu();   // show the title screen on load
+  }
+
+  // ---- title / main menu: a golden-hour desert hero with Play / Settings / Credits ----
+  _buildMenu() {
+    const m = el("div", "menu-screen");
+    m.innerHTML =
+      '<div class="menu-ground"></div>' +
+      '<div class="menu-pyr back"></div>' +
+      '<div class="menu-pyr main"></div>';
+    const content = el("div", "menu-content");
+    const top = el("div", "menu-top");
+    top.appendChild(el("h1", "menu-title", STR.title));
+    top.appendChild(el("div", "menu-tag", STR.menuTag));
+    const bottom = el("div", "menu-bottom");
+    const play = el("button", "menu-btn play", STR.menuPlay); play.onclick = () => this.closeMenu();
+    const set = el("button", "menu-btn", STR.menuSettings); set.onclick = () => this._openModal("settings");
+    const cr = el("button", "menu-btn", STR.menuCredits); cr.onclick = () => this._openModal("credits");
+    bottom.append(play, set, cr);
+    const credit = el("div", "menu-credit");
+    credit.innerHTML = `${STR.creditsMade} · <a href="https://itch.io" target="_blank" rel="noopener">itch.io</a>`;
+    content.append(top, bottom, credit);
+    m.appendChild(content);
+    this.menuEl = m;
+    this.root.appendChild(m);
+  }
+  openMenu() { this._menuOpen = true; this.menuEl.classList.remove("hidden"); }
+  closeMenu() {
+    this._menuOpen = false; this.menuEl.classList.add("hidden");
+    if (this._pendingOffline) { const d = this._pendingOffline; this._pendingOffline = null; this._openModal("offline", d); }
   }
 
   // --- building info helpers ---
@@ -304,7 +337,7 @@ export class UI {
   }
 
   _openModal(kind, data) {
-    const m = this.modalBox; m.innerHTML = "";
+    const m = this.modalBox; m.innerHTML = ""; m.className = "modal";
     if (kind === "settings") {
       m.appendChild(el("h2", null, STR.settings));
       const s = this.app.getState();
@@ -349,6 +382,16 @@ export class UI {
       const b = el("button", "btn primary big", `${STR.prestigeBtn} (+${data.gain} ${STR.legacy})`);
       b.onclick = () => { this._closeModal(); this.app.prestige(); };
       m.appendChild(b);
+    } else if (kind === "credits") {
+      m.classList.add("credits");
+      m.appendChild(el("div", "ceremony-ic", icon("pyramid")));
+      m.appendChild(el("h2", null, STR.creditsTitle));
+      m.appendChild(el("p", "cr-made", STR.creditsMade));
+      const a = el("a", "cr-itch", STR.creditsItch); a.href = "https://itch.io"; a.target = "_blank"; a.rel = "noopener";
+      m.appendChild(a);
+      m.appendChild(el("p", "cr-tech", STR.creditsTech));
+      m.appendChild(el("p", "cr-thanks", STR.creditsThanks));
+      m.appendChild(this._closeBtn());
     }
     this.modalWrap.classList.remove("hidden");
   }
@@ -370,7 +413,7 @@ export class UI {
     this.modalBox.append(ta, b, this._closeBtn());
   }
 
-  showOffline(data) { if (data) this._openModal("offline", data); }
+  showOffline(data) { if (!data) return; if (this._menuOpen) { this._pendingOffline = data; return; } this._openModal("offline", data); }
   showCeremony(name, gain) { this._openModal("ceremony", { name, gain }); }
 
   toast(text, kind = "info") {

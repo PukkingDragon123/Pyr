@@ -87,7 +87,7 @@ export class Renderer {
     this.hemi = new THREE.HemisphereLight(0xbfe0ff, 0xc8a060, 0.7); scene.add(this.hemi);
     this.sun = new THREE.DirectionalLight(0xfff0d0, 1.25);
     this.sun.castShadow = true; this.sun.shadow.mapSize.set(2048, 2048);
-    this.sun.shadow.bias = -0.0006; this.sun.shadow.normalBias = 0.04;
+    this.sun.shadow.bias = -0.0006; this.sun.shadow.normalBias = 0.04; this.sun.shadow.radius = 3; // softer contact shadows
     const sc = this.sun.shadow.camera; sc.near = 1; sc.far = 220; sc.left = -70; sc.right = 70; sc.top = 70; sc.bottom = -70;
     scene.add(this.sun); scene.add(this.sun.target);
 
@@ -904,41 +904,49 @@ export class Renderer {
     const place = (dx, dz, face) => { w.grp.position.set(base.x + dx, 0, base.z + dz); w.grp.rotation.y = face != null ? face : Math.atan2(-dx, -dz); };
     // reset arms toward neutral each frame via spring helper
     const arm = (l, r) => { w.aL += (l - w.aL) * 0.3; w.aR += (r - w.aR) * 0.3; w.armL.rotation.x = w.aL; w.armR.rotation.x = w.aR; };
-    const stride = (amp) => { const s = Math.sin(ph * 8) * amp; w.legL.rotation.x = s; w.legR.rotation.x = -s; };
+    const stride = (amp) => { const s = Math.sin(ph * 9) * amp; w.legL.rotation.x = s; w.legR.rotation.x = -s; };
+    let bob = 0;
     w.block && (w.block.visible = false);
-    if (id === "wooden_rollers") {                        // walk-push, low lean (logs spin in _updateOperators)
-      place(seat ? 0.34 : -0.34, 0.7, 0); stride(0.5);
-      w.body.rotation.x = 0.5; arm(-1.2, -1.2);
-    } else if (id === "rope_winch") {                     // alternating rope-haul (wheel spins in _updateOperators)
-      const a = seat === 0; const pull = Math.sin(ph * 5 + (a ? 0 : Math.PI));
-      place(a ? -0.4 : 0.4, 0.6, 0); stride(0.2 + Math.max(0, pull) * 0.3);
-      w.body.rotation.x = 0.3 + Math.max(0, pull) * 0.3; arm(-1.0 - Math.max(0, pull) * 0.8, -1.0 - Math.max(0, pull) * 0.8);
+    if (id === "wooden_rollers") {                        // heave the sled forward, then reset back (visible push)
+      const c = (op * 0.55) % 1, fwd = c < 0.7 ? c / 0.7 : 1 - (c - 0.7) / 0.3;
+      place(seat ? 0.34 : -0.34, 0.95 - fwd * 1.1, 0); stride(0.55);
+      w.body.rotation.x = 0.45 + (c < 0.7 ? 0.18 : 0); arm(-1.15, -1.15); bob = Math.abs(Math.sin(ph * 9)) * 0.04;
+    } else if (id === "rope_winch") {                     // alternating haul — heave BACK on the pull, step in to recover
+      const a = seat === 0, pull = Math.max(0, Math.sin(op * 4 + (a ? 0 : Math.PI)));
+      place(a ? -0.4 : 0.4, 0.55 + pull * 0.5, 0); stride(0.25 + pull * 0.35);
+      w.body.rotation.x = -0.1 + pull * 0.55; arm(-0.9 - pull * 0.9, -0.9 - pull * 0.9); bob = pull * 0.05;
     } else if (id === "sled") {
       if (role === "engineer") {                          // kneels & pours water at runner
         place(0.0, -0.7, Math.PI); w.body.rotation.x = 0.7; w.legL.rotation.x = -1.2; w.legR.rotation.x = -1.2;
-        arm(-1.4 + Math.sin(op * 4) * 0.4, -1.4 + Math.cos(op * 4) * 0.4);
-      } else { place(seat ? 0.34 : -0.34, 0.8, 0); stride(0.5); w.body.rotation.x = 0.45; arm(-1.1, -1.1); }
+        arm(-1.4 + Math.sin(op * 5) * 0.5, -1.4 + Math.cos(op * 5) * 0.5);
+      } else {                                            // haul the sled forward
+        const c = (op * 0.5) % 1, fwd = c < 0.75 ? c / 0.75 : 1 - (c - 0.75) / 0.25;
+        place(seat ? 0.34 : -0.34, 1.0 - fwd * 1.1, 0); stride(0.55); w.body.rotation.x = 0.4; arm(-1.05, -1.05); bob = Math.abs(Math.sin(ph * 9)) * 0.04;
+      }
     } else if (id === "crane") {
-      if (role === "engineer") {                          // circular crank (counterweight bobs in _updateOperators)
-        place(0.5, 0.4, -0.6); w.aL = -1.2 + Math.sin(op * 5) * 0.6; w.aR = -1.2 + Math.cos(op * 5) * 0.6;
-        w.armL.rotation.x = w.aL; w.armR.rotation.x = w.aR; w.body.rotation.x = 0.15;
-      } else { place(-0.6, 0.5, 0); arm(-1.6, -1.6); w.body.rotation.x = 0.2; }  // laborer steadies rope
-    } else if (id === "lubrication") {                    // kneeling, sweeping arm
-      place(0.0, 0.55, 0); w.legL.rotation.x = -1.1; w.legR.rotation.x = -1.1; w.body.rotation.x = 0.5;
-      const s = Math.sin(op * 4); arm(-1.3 + s * 0.5, -1.3 - s * 0.5);
+      if (role === "engineer") {                          // turn the crank (counterweight bobs in _updateOperators)
+        place(0.5, 0.4, -0.6); w.aL = -1.2 + Math.sin(op * 5) * 0.7; w.aR = -1.2 + Math.cos(op * 5) * 0.7;
+        w.armL.rotation.x = w.aL; w.armR.rotation.x = w.aR; w.body.rotation.x = 0.12 + Math.sin(op * 5) * 0.06; stride(0);
+      } else {                                            // haul the hoist rope, hand over hand
+        const h = Math.sin(op * 3.5); place(-0.6, 0.5, 0); arm(-1.9 + h * 0.5, -1.9 - h * 0.5); w.body.rotation.x = 0.15 + Math.max(0, h) * 0.25; bob = Math.abs(h) * 0.05;
+      }
+    } else if (id === "lubrication") {                    // kneel & sweep grease side to side along the channel
+      place(Math.sin(op * 1.5) * 0.32, 0.55, 0); w.legL.rotation.x = -1.1; w.legR.rotation.x = -1.1; w.body.rotation.x = 0.5;
+      const s = Math.sin(op * 4); arm(-1.3 + s * 0.6, -1.3 - s * 0.6);
       if (Math.random() < dt * rate * 2) this.spawnChips(w.grp.getWorldPosition(this._tmpV).setY(0.3), 0x6fc7e0, 1);
-    } else if (id === "massive_ramp") {                   // overseer semaphore; head scans
+    } else if (id === "massive_ramp") {                   // overseer directs; laborer paces
       place(seat ? 0.5 : -0.5, 0.5, 0);
-      if (role === "overseer") { const a = Math.sin(op * 3); w.armL.rotation.x = -2.6 + a * 0.5; w.armR.rotation.x = -0.4 - a * 0.5; w.aL = w.armL.rotation.x; w.aR = w.armR.rotation.x; w.head.rotation.y = Math.sin(op * 1.2) * 0.5; }
-      else { stride(0.1); arm(-0.3, -0.3); }
-    } else if (id === "elevator") {                       // synchronized deep platform-pulls
-      const pull = Math.max(0, Math.sin(op * 4));
-      place(seat ? 0.4 : -0.4, 0.5, 0); w.body.rotation.x = 0.2 + pull * 0.4; arm(-0.6 - pull * 1.4, -0.6 - pull * 1.4);
-      stride(pull * 0.2);
-    } else if (id === "marvel") {                          // robed slow raised-arm sway (shrine glow in _updateOperators)
+      if (role === "overseer") { const a = Math.sin(op * 3); w.armL.rotation.x = -2.6 + a * 0.6; w.armR.rotation.x = -0.4 - a * 0.6; w.aL = w.armL.rotation.x; w.aR = w.armR.rotation.x; w.head.rotation.y = Math.sin(op * 1.2) * 0.5; }
+      else { stride(0.5); const sw = Math.sin(ph * 9) * 0.4; arm(-0.3 + sw, -0.3 - sw); bob = Math.abs(Math.sin(ph * 9)) * 0.035; }
+    } else if (id === "elevator") {                       // deep synchronized platform-pulls (squat down/up)
+      const pull = Math.max(0, Math.sin(op * 3.5));
+      place(seat ? 0.4 : -0.4, 0.5, 0); w.body.rotation.x = 0.15 + pull * 0.45; arm(-0.5 - pull * 1.6, -0.5 - pull * 1.6);
+      w.legL.rotation.x = pull * 0.7; w.legR.rotation.x = pull * 0.7; bob = -pull * 0.18;   // squat with the haul
+    } else if (id === "marvel") {                          // robed priests, slow ceremonial sway (shrine glow in _updateOperators)
       place(seat ? 0.5 : -0.5, 0.6, 0); const s = Math.sin(op * 1.2);
-      w.body.rotation.z = s * 0.08; w.armL.rotation.x = -2.3 + s * 0.2; w.armR.rotation.x = -2.3 - s * 0.2; w.aL = w.armL.rotation.x; w.aR = w.armR.rotation.x;
-    } else { place(0, 0.6, 0); stride(0.3); arm(-0.4, -0.4); }
+      w.body.rotation.z = s * 0.1; w.armL.rotation.x = -2.3 + s * 0.25; w.armR.rotation.x = -2.3 - s * 0.25; w.aL = w.armL.rotation.x; w.aR = w.armR.rotation.x; bob = Math.sin(op * 1.2 + 1) * 0.03;
+    } else { place(0, 0.6, 0); stride(0.4); arm(-0.4, -0.4); }
+    w.grp.position.y += bob;
     w.body.scale.y = 1 + Math.sin(w.breathe + ph * 2.4) * 0.05;
   }
 
