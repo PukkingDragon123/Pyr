@@ -340,25 +340,47 @@ export class Renderer {
     return grp;
   }
   // distinct machine models (ramp equipment)
+  // Animated sub-parts are cached on grp.userData (spin[]/cw/emissive[]) so the
+  // operator update can drive them once per machine — no per-frame child scans.
   _machineModel(id) {
     const grp = new THREE.Group();
     if (id === "wooden_rollers") {
       const plank = this._box(1.2, 0.14, 0.7, 0xb08a5a, 0.34); grp.add(plank);
-      for (let i = -1; i <= 1; i++) { const log = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.82, 8), this._mat(0x8a5e34)); log.rotation.x = Math.PI / 2; log.position.set(i * 0.4, 0.12, 0); log.castShadow = true; grp.add(log); }
+      const logs = [];
+      for (let i = -1; i <= 1; i++) { const log = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.82, 8), this._mat(0x8a5e34)); log.rotation.x = Math.PI / 2; log.position.set(i * 0.4, 0.12, 0); log.castShadow = true; grp.add(log); logs.push(log); }
       const block = this._box(0.44, 0.4, 0.44, 0xe7d6ad, 0.61); grp.add(block);
+      grp.userData.spin = logs;
     } else if (id === "crane") {
       const post = this._box(0.16, 1.3, 0.16, 0x7c5530, 0.65); post.castShadow = true; grp.add(post);
       const beam = this._box(1.7, 0.1, 0.1, 0x8a5e34, 1.2); beam.rotation.z = -0.3; grp.add(beam);
       const cw = this._box(0.32, 0.32, 0.32, 0x9a7a8e, 0); cw.position.set(-0.75, 1.42, 0); grp.add(cw);
+      grp.userData.cw = cw;
     } else if (id === "rope_winch") {
       for (const s of [0.3, -0.3]) { const p = this._box(0.12, 1.0, 0.12, 0x7c5530, 0.5); p.position.x = s; grp.add(p); }
       const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.5, 10), this._mat(0x8a5e34)); wheel.rotation.z = Math.PI / 2; wheel.position.y = 0.95; wheel.castShadow = true; grp.add(wheel);
+      grp.userData.spin = [wheel];
+    } else if (id === "marvel") {                 // a glowing shrine the priests tend
+      const dais = this._box(1.1, 0.22, 1.1, 0xcdbb8e, 0.11); grp.add(dais);
+      for (const s of [0.42, -0.42]) { const col = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 1.0, 8), this._mat(0xd8c9a6)); col.position.set(s, 0.6, 0); col.castShadow = true; grp.add(col); }
+      const cap = this._box(0.5, 0.5, 0.5, 0xe3d3aa, 0.98); cap.castShadow = true;
+      cap.material.emissive = new THREE.Color(0xf3c44e); cap.material.emissiveIntensity = 0.3; grp.add(cap);
+      grp.userData.emissive = [cap];
     } else { // sled / generic
       const sled = this._box(0.9, 0.16, 1.4, 0x6e4a2a, 0.2); grp.add(sled);
       for (const s of [0.4, -0.4]) { const r = this._box(0.1, 0.1, 1.5, 0x553820, 0.07); r.position.x = s; grp.add(r); }
       const block = this._box(0.5, 0.45, 0.5, 0xe3d3aa, 0.55); block.castShadow = true; grp.add(block);
     }
     return grp;
+  }
+  // free GPU resources for a removed group (worker/operator/gatherer); guards the
+  // two shared singletons (_eyeGeo/_black) which must never be disposed.
+  _disposeGrp(grp) {
+    grp.traverse((o) => {
+      if (!o.isMesh) return;
+      if (o.geometry && o.geometry !== this._eyeGeo) o.geometry.dispose();
+      const m = o.material;
+      if (m && m !== this._black) { if (Array.isArray(m)) m.forEach((x) => x.dispose()); else m.dispose(); }
+    });
   }
   // small held-tool props for staff/gatherers (box/cylinder primitives, flat-shaded).
   // returns a THREE.Group; the caller positions/parents it on a hand.
@@ -737,7 +759,7 @@ export class Renderer {
     const CAP = 12; if (sum > CAP) for (const k in want) want[k] = Math.max(1, Math.round(want[k] * CAP / sum));
     const have = {}; for (const w of this.gatherers) have[w.res] = (have[w.res] || 0) + 1;
     for (const res in want) while ((have[res] || 0) < want[res]) { const w = this._makeGatherer(res); this.gathererGroup.add(w.grp); this.gatherers.push(w); have[res] = (have[res] || 0) + 1; }
-    for (const res in have) { let extra = have[res] - (want[res] || 0); for (let i = this.gatherers.length - 1; i >= 0 && extra > 0; i--) if (this.gatherers[i].res === res) { this.gathererGroup.remove(this.gatherers[i].grp); this.gatherers.splice(i, 1); extra--; } }
+    for (const res in have) { let extra = have[res] - (want[res] || 0); for (let i = this.gatherers.length - 1; i >= 0 && extra > 0; i--) if (this.gatherers[i].res === res) { this.gathererGroup.remove(this.gatherers[i].grp); this._disposeGrp(this.gatherers[i].grp); this.gatherers.splice(i, 1); extra--; } }
 
     const whip = !!(state.whip && state.whip.boostT > 0);
     const sp = (2.0 + Math.min(3, (stats.buildRate || 0) * 0.05)) * (whip ? 1.3 : 1) * dt;
@@ -857,7 +879,7 @@ export class Renderer {
         const w = this._makeWorker(role); w.grp.scale.setScalar(role === "overseer" ? 0.86 : 0.7);
         w.opPhase = Math.random() * TAU; this.operatorGroup.add(w.grp); pool.push(w);
       }
-      while (pool.length > want) { const w = pool.pop(); this.operatorGroup.remove(w.grp); }
+      while (pool.length > want) { const w = pool.pop(); this.operatorGroup.remove(w.grp); this._disposeGrp(w.grp); }
       // position each operator around its machine slot and animate by machine type
       for (let i = 0; i < pool.length; i++) {
         const w = pool[i], role = spec.roles[i % spec.roles.length];
@@ -868,6 +890,13 @@ export class Renderer {
         w.phase += dt * rate; w.opPhase += dt * rate;
         this._opAnim(id, w, role, seat, base, dt, rate, machine);
       }
+      // animate each machine's moving parts ONCE per machine (cached refs, no scans)
+      for (const machine of slots) {
+        const ud = machine.userData; ud.t = (ud.t || 0) + dt * rate;
+        if (ud.spin) for (const c of ud.spin) c.rotation.x += dt * rate * 3;
+        if (ud.cw) ud.cw.position.y = 1.42 + Math.sin(ud.t * 5) * 0.18;
+        if (ud.emissive) for (const c of ud.emissive) c.material.emissiveIntensity = 0.3 + 0.3 * (0.5 + 0.5 * Math.sin(ud.t * 1.2));
+      }
     }
   }
   _opAnim(id, w, role, seat, base, dt, rate, machine) {
@@ -877,25 +906,22 @@ export class Renderer {
     const arm = (l, r) => { w.aL += (l - w.aL) * 0.3; w.aR += (r - w.aR) * 0.3; w.armL.rotation.x = w.aL; w.armR.rotation.x = w.aR; };
     const stride = (amp) => { const s = Math.sin(ph * 8) * amp; w.legL.rotation.x = s; w.legR.rotation.x = -s; };
     w.block && (w.block.visible = false);
-    if (id === "wooden_rollers") {                        // walk-push, low lean; logs spin
+    if (id === "wooden_rollers") {                        // walk-push, low lean (logs spin in _updateOperators)
       place(seat ? 0.34 : -0.34, 0.7, 0); stride(0.5);
       w.body.rotation.x = 0.5; arm(-1.2, -1.2);
-      for (const c of machine.children) if (c.geometry && c.geometry.type === "CylinderGeometry") c.rotation.x += dt * rate * 3;
-    } else if (id === "rope_winch") {                     // alternating rope-haul; wheel spins
+    } else if (id === "rope_winch") {                     // alternating rope-haul (wheel spins in _updateOperators)
       const a = seat === 0; const pull = Math.sin(ph * 5 + (a ? 0 : Math.PI));
       place(a ? -0.4 : 0.4, 0.6, 0); stride(0.2 + Math.max(0, pull) * 0.3);
       w.body.rotation.x = 0.3 + Math.max(0, pull) * 0.3; arm(-1.0 - Math.max(0, pull) * 0.8, -1.0 - Math.max(0, pull) * 0.8);
-      const wheel = machine.children.find((c) => c.geometry && c.geometry.type === "CylinderGeometry"); if (wheel) wheel.rotation.x += dt * rate * 2.4;
     } else if (id === "sled") {
       if (role === "engineer") {                          // kneels & pours water at runner
         place(0.0, -0.7, Math.PI); w.body.rotation.x = 0.7; w.legL.rotation.x = -1.2; w.legR.rotation.x = -1.2;
         arm(-1.4 + Math.sin(op * 4) * 0.4, -1.4 + Math.cos(op * 4) * 0.4);
       } else { place(seat ? 0.34 : -0.34, 0.8, 0); stride(0.5); w.body.rotation.x = 0.45; arm(-1.1, -1.1); }
     } else if (id === "crane") {
-      if (role === "engineer") {                          // circular crank
+      if (role === "engineer") {                          // circular crank (counterweight bobs in _updateOperators)
         place(0.5, 0.4, -0.6); w.aL = -1.2 + Math.sin(op * 5) * 0.6; w.aR = -1.2 + Math.cos(op * 5) * 0.6;
         w.armL.rotation.x = w.aL; w.armR.rotation.x = w.aR; w.body.rotation.x = 0.15;
-        const cw = machine.children.find((c) => c.position.x < -0.5); if (cw) cw.position.y = 1.42 + Math.sin(op * 5) * 0.18; // counterweight bob
       } else { place(-0.6, 0.5, 0); arm(-1.6, -1.6); w.body.rotation.x = 0.2; }  // laborer steadies rope
     } else if (id === "lubrication") {                    // kneeling, sweeping arm
       place(0.0, 0.55, 0); w.legL.rotation.x = -1.1; w.legR.rotation.x = -1.1; w.body.rotation.x = 0.5;
@@ -909,10 +935,9 @@ export class Renderer {
       const pull = Math.max(0, Math.sin(op * 4));
       place(seat ? 0.4 : -0.4, 0.5, 0); w.body.rotation.x = 0.2 + pull * 0.4; arm(-0.6 - pull * 1.4, -0.6 - pull * 1.4);
       stride(pull * 0.2);
-    } else if (id === "marvel") {                          // robed slow raised-arm sway; emissive pulse
+    } else if (id === "marvel") {                          // robed slow raised-arm sway (shrine glow in _updateOperators)
       place(seat ? 0.5 : -0.5, 0.6, 0); const s = Math.sin(op * 1.2);
       w.body.rotation.z = s * 0.08; w.armL.rotation.x = -2.3 + s * 0.2; w.armR.rotation.x = -2.3 - s * 0.2; w.aL = w.armL.rotation.x; w.aR = w.armR.rotation.x;
-      for (const c of machine.children) if (c.material && c.material.emissive !== undefined) c.material.emissiveIntensity = 0.3 + 0.3 * (0.5 + 0.5 * s);
     } else { place(0, 0.6, 0); stride(0.3); arm(-0.4, -0.4); }
     w.body.scale.y = 1 + Math.sin(w.breathe + ph * 2.4) * 0.05;
   }
@@ -1143,7 +1168,7 @@ export class Renderer {
     // show as many workers as you actually have (0 when you have none), capped for perf
     const target = state.complete ? 8 : Math.min(40, Math.max(0, Math.round(stats.builders || 0)));
     while (this.workers.length < target) { const w = this._makeWorker("laborer"); this.workerGroup.add(w.grp); this.workers.push(w); }
-    while (this.workers.length > target) { const w = this.workers.pop(); this.workerGroup.remove(w.grp); }
+    while (this.workers.length > target) { const w = this.workers.pop(); this.workerGroup.remove(w.grp); this._disposeGrp(w.grp); }
 
     // layer a small CAPPED set of visible elites onto the laborer pool (NOT subtracted
     // from haul count): recolor/reprop a slot ONLY when its role actually changes.
@@ -1164,7 +1189,8 @@ export class Renderer {
         const nw = this._makeWorker(want);
         nw.state = w.state; nw.p = w.p; nw.cell = w.cell; nw.timer = w.timer; nw.placed = w.placed;
         nw.lane = w.lane; nw.foot = w.foot; nw.grp.position.copy(w.grp.position); nw.grp.rotation.copy(w.grp.rotation);
-        this.workerGroup.remove(w.grp); this.workerGroup.add(nw.grp); this.workers[i] = nw;
+        nw.whipT = w.whipT; nw.phase = w.phase; nw.aL = w.aL; nw.aR = w.aR; nw.breathe = w.breathe; // keep in-flight whip + gait continuity
+        this.workerGroup.remove(w.grp); this._disposeGrp(w.grp); this.workerGroup.add(nw.grp); this.workers[i] = nw;
       }
     }
 

@@ -89,17 +89,21 @@ function milestoneValue(s, stat) {
   return 0;
 }
 
-// Push a {type:"milestone"} fx for any milestone newly satisfied. On first call
-// (_msSeen undefined) pre-mark every already-satisfied milestone so reloading a
-// save never re-toasts. Cosmetic only — touches no res/buildings/workers/stats.
+// Per-state "already seen" sets, kept OFF the state object in a module WeakMap so
+// they are never serialized into the save (zero persisted fields). A reloaded or
+// imported state is a fresh object → fresh Set → all currently-satisfied
+// milestones are pre-marked on the first pass, so reloading never re-toasts.
+const _msSeen = new WeakMap();
+// Push a {type:"milestone"} fx for any milestone newly satisfied. Cosmetic only —
+// touches no res/buildings/workers/stats.
 function checkMilestones(s) {
-  const first = s._msSeen === undefined;
-  if (first) s._msSeen = new Set();
+  let seen = _msSeen.get(s);
+  const first = !seen;
+  if (first) { seen = new Set(); _msSeen.set(s, seen); }
   for (const m of MILESTONES) {
-    if (s._msSeen.has(m.id)) continue;
-    const met = milestoneValue(s, m.need.stat) >= m.need.n;
-    if (!met) continue;
-    s._msSeen.add(m.id);
+    if (seen.has(m.id)) continue;
+    if (milestoneValue(s, m.need.stat) < m.need.n) continue;
+    seen.add(m.id);
     if (!first) s._fx.push({ type: "milestone", text: m.text });
   }
 }
