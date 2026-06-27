@@ -6,6 +6,7 @@ import {
   FIRST_WONDER_TOTAL, BASE_CAPS, OFFLINE_CAP_S, OFFLINE_RATE,
   UNLOCK_LEVEL, levelForXp, questFor, HARVEST_BASE, PLACEABLE, ADJ_REQ,
   footprintCells, buildableTiles, MAX_TIER, TIER_MULT, upgradeCost,
+  MILESTONES,
 } from "./data.js";
 import {
   costFor, canAfford, spend, capsFor, clampResources, resolveQty,
@@ -79,6 +80,31 @@ function addBlocks(s, n) {
 }
 
 // ---------------------------------------------------------------------------
+// Cosmetic milestones — derive a milestone's current value straight from state.
+// No persisted fields; used only to decide when to toast (via transient _msSeen).
+function milestoneValue(s, stat) {
+  if (stat === "totalBlocksAllTime") return (s.stats && s.stats.totalBlocksAllTime) || 0;
+  if (stat === "buildings") return Object.values(s.buildings || {}).reduce((a, b) => a + (b || 0), 0);
+  if (stat === "workers") return Object.values(s.workers || {}).reduce((a, b) => a + (b || 0), 0);
+  return 0;
+}
+
+// Push a {type:"milestone"} fx for any milestone newly satisfied. On first call
+// (_msSeen undefined) pre-mark every already-satisfied milestone so reloading a
+// save never re-toasts. Cosmetic only — touches no res/buildings/workers/stats.
+function checkMilestones(s) {
+  const first = s._msSeen === undefined;
+  if (first) s._msSeen = new Set();
+  for (const m of MILESTONES) {
+    if (s._msSeen.has(m.id)) continue;
+    const met = milestoneValue(s, m.need.stat) >= m.need.n;
+    if (!met) continue;
+    s._msSeen.add(m.id);
+    if (!first) s._fx.push({ type: "milestone", text: m.text });
+  }
+}
+
+// ---------------------------------------------------------------------------
 export function step(s, dt) {
   if (!s._fx) s._fx = [];
   s.clock += dt; s.stats.playSeconds += dt;
@@ -112,6 +138,7 @@ export function step(s, dt) {
   if (s._level == null) s._level = lvl;
   else if (lvl > s._level) { for (let L = s._level + 1; L <= lvl; L++) s._fx.push({ type: "level", level: L }); s._level = lvl; }
   checkQuests(s);
+  checkMilestones(s);
 
   s._stats = st;
   return st;

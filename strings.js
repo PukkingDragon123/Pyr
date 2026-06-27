@@ -97,6 +97,8 @@ export const STR = {
   startTip: "Tap an empty tile to build · Tap a building to upgrade · Hire crew from the menu",
   unlocked: (n) => `Unlocked: ${n}`,
   dynastyToast: (n) => `A new dynasty begins — ${n}`,
+  milestone: "Milestone!",
+  upgradeDelta: (pct, res) => `+${pct}% ${res}/s`,
 
   whip: "Crack the Whip!",
   whipGo: "FASTER!",

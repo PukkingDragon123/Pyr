@@ -13,7 +13,7 @@ Relaxing to play, on desktop, mobile (touch), or with a gamepad.
 
 ## ▶ Play
 
-**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=16**
+**https://raw.githack.com/PukkingDragon123/Pyr/claude/lucid-pascal-6yhhh1/index.html?v=17**
 
 (Served straight from this branch via raw.githack.com — bump the `?v=` number to bust the cache after updates.)
 
@@ -40,6 +40,13 @@ polished, colourful mobile-game UI:
   above it showing exactly **what it produces** (a limestone-brick, water-drop,
   wood-log, copper-ingot, grain or boost-star icon) and its **tier as five gold
   pips**. Upgrade and the sign updates instantly.
+- **Footprints you can see** — buildings show their **size**: a `2×2` / `2×1` /
+  `1×1` chip in the build sheet and upgrade panel, a **ground slab** under bigger
+  builds, and a **footprint outline** that previews exactly which tiles you'll
+  cover (green where it fits, red where it won't) as you hover.
+- **Milestones to chase** — passing big lifetime marks (your hundredth, thousandth,
+  millionth stone; growing settlements and crews) fires a celebratory milestone —
+  always a next goal on the horizon.
 - **Upgrade everything (Clash-of-Clans tiers)** — tap a placed building to open
   its upgrade panel: see what it produces now, the next tier's output, and the
   cost. Each level multiplies that building's output (and it grows + gets a gold
@@ -104,7 +111,7 @@ src/
   ui.js             # DOM HUD / build menus / modals
   icons.js, rng.js, format.js
 design/             # plan.md, thresholds.md, assets.csv
-tools/              # make_card_art.py (deploy art), test_sim.mjs, smoke.mjs, closeup.mjs
+tools/              # make_card_art.py (deploy art), test_sim.mjs, smoke.mjs, closeup.mjs, shot_v17.mjs
 ```
 
 ## Tech notes
@@ -133,16 +140,25 @@ tools/              # make_card_art.py (deploy art), test_sim.mjs, smoke.mjs, cl
   quarry to a cutting yard; a stonecutter shapes **solid rock → dressed brick**
   (the mesh visibly changes, chips fly, a brick pile grows); masons carry the
   finished bricks up the ramp (smoothstep-eased climb) and set them in place.
-- **Workers you can count** — the crew is rendered to your actual builder count
-  (you start with none and *see* every laborer you hire). Each worker is a proper
-  little figure: **black dot eyes**, a neck, broad shoulders, an Egyptian **nemes
-  headcloth**, hands, sandalled feet and a belt; animation is fluid — idle
-  breathing, head bob, springy (damped) arm follow-through.
-- **Deliberate, rewarding building** — masons are slower and purposeful: they
-  queue at the ramp foot, **hug a dressed block to the chest**, climb the pyramid
-  and walk to the **exact next tile**, then bend and set the stone there — the
-  block only appears in that precise cell once it's laid. Slower, but you watch
-  every brick find its place.
+- **A crew of distinct staff** — the workforce is rendered to your actual roster,
+  and **each role looks the part**: bare-chested **laborers** hauling stone,
+  apron-and-headband **stone masons** with chisel and mallet, caped **engineers**
+  with a measuring rod, robed **priests** in gold collars, **architects** with a
+  papyrus scroll, and red-sashed **overseers** in tall hats cracking the whip.
+  Every figure has **black dot eyes**, a neck, broad shoulders and sandalled feet.
+- **Lifelike movement** — a real walk cycle with out-of-phase stride, **hip and
+  shoulder counter-rotation**, opposite-arm swing, weighted carrying, kilt sway,
+  and idle variety (workers wipe their brow, stretch, look around) — so the site
+  reads as a living crowd, not clones on a treadmill.
+- **Smart workers that run your machines** — buy machines and crews actually
+  **operate them**: teams crank the **rope winch**, push **wooden rollers** under
+  the sleds, **pour water to grease the runners**, work the **crane** to hoist
+  blocks, and run the **elevator** — a whole industrial supply line, faster the
+  more you build.
+- **Deliberate, rewarding building** — masons queue at the ramp foot, **hug a
+  dressed block to the chest**, climb the pyramid and walk to the **exact next
+  tile**, then bend and set the stone there — the block only appears in that
+  precise cell once it's laid. You watch every brick find its place.
 - **Detailed-but-blocky models** — mud-brick houses with parapets and roof-beams,
   four-silo granaries, columned temples, market stalls; real **machine models**
   (log rollers, rope winches, cranes, sleds); **decor** like obelisks, statues,

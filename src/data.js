@@ -176,6 +176,30 @@ export function footprintCells(id, gx, gz) {
   for (let x = 0; x < s[0]; x++) for (let z = 0; z < s[1]; z++) out.push([gx + x, gz + z]);
   return out;
 }
+// Human-readable footprint size, e.g. "2×2" / "2×1" / "1×1".
+export function sizeLabel(id){ const s = SIZE[id] || [1,1]; return s[0] + "×" + s[1]; }
+
+// ----------------------------------------------------------------------------
+// Milestones — purely cosmetic catalog (NOT save state). The sim checks these
+// each tick against transient stats and toasts on first crossing; nothing here
+// is ever serialized. stat ∈ {totalBlocksAllTime, buildings, workers}.
+//   totalBlocksAllTime → state.stats.totalBlocksAllTime
+//   buildings          → sum of state.buildings values (total placed)
+//   workers            → sum of state.workers values (total crew)
+// ----------------------------------------------------------------------------
+export const MILESTONES = [
+  { id: "blocks_100",   need: { stat: "totalBlocksAllTime", n: 100 },     text: "First hundred stones laid — the works have begun." },
+  { id: "blocks_1k",    need: { stat: "totalBlocksAllTime", n: 1000 },    text: "A thousand bricks rise from the sand." },
+  { id: "blocks_10k",   need: { stat: "totalBlocksAllTime", n: 10000 },   text: "The quarries roar — 10,000 stones set in place." },
+  { id: "blocks_100k",  need: { stat: "totalBlocksAllTime", n: 100000 },  text: "100,000 stones — a mountain takes shape on the plateau." },
+  { id: "blocks_1m",    need: { stat: "totalBlocksAllTime", n: 1000000 }, text: "A million stones! The gods themselves take notice." },
+  { id: "buildings_5",  need: { stat: "buildings", n: 5 },  text: "Five works stand — a true settlement by the Nile." },
+  { id: "buildings_15", need: { stat: "buildings", n: 15 }, text: "Fifteen works hum with industry along the river." },
+  { id: "buildings_30", need: { stat: "buildings", n: 30 }, text: "Thirty works — a thriving city serves the pyramid." },
+  { id: "workers_10",   need: { stat: "workers", n: 10 }, text: "Ten hands answer the crown's call." },
+  { id: "workers_25",   need: { stat: "workers", n: 25 }, text: "Twenty-five strong — the gangs grow mighty." },
+  { id: "workers_50",   need: { stat: "workers", n: 50 }, text: "Fifty laborers haul as one — an army of the pyramid." },
+];
 
 // ----------------------------------------------------------------------------
 // Building upgrade tiers (Clash-of-Clans style): each building TYPE has a level

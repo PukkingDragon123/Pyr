@@ -35,6 +35,21 @@ function skyAt(phase) {
 
 const SKINS = [0xcaa06a, 0xb5895a, 0x9a6f44, 0xd8b483];
 const CLOTHS = [0x3a6ea5, 0xc0392b, 0xd4a017, 0x2c8c84];
+// distinct staff palette (v17). Reads at iso distance via strong silhouette colours.
+const ROLE_PALETTE = {
+  apron: 0x6e4a2a,      // mason leather apron (brown)
+  robe: 0xf2ead2,       // priest full-length linen robe (white)
+  sash: 0x8e1f1f,       // overseer deep-red torso sash
+  pectoral: 0xe9b94a,   // priest gold pectoral collar
+  trim: 0x2f6fb0,       // architect blue kilt/nemes trim
+  headband: 0xc0392b,   // mason red headband
+  cape: 0xf2ead2,       // engineer white linen short-cape
+  hat: 0xe9e1cf,        // engineer flat-top scribe cap / overseer conical
+  copper: 0xc9743a,     // copper chisel / tool metal
+  wood: 0x8a5e34,       // mallet / rod / staff wood
+  scroll: 0xe7dcb8,     // papyrus scroll
+  gold: 0xf3c44e,       // ankh / accents
+};
 // resource → chip/carry colour for gathering VFX
 const NODE_COL = { wood: 0x8a5e34, limestone: 0xe7d6ad, food: 0xd9b24a, water: 0x49b5d6, granite: 0x9a7a8e, copper: 0xe08a4e };
 
@@ -108,6 +123,8 @@ export class Renderer {
     this.nodeGroup = new THREE.Group(); scene.add(this.nodeGroup);   // procedural resource map (trees/rocks/...)
     this.supplyGroup = new THREE.Group(); scene.add(this.supplyGroup); // sleds + stone-cutting yard
     this.workerGroup = new THREE.Group(); scene.add(this.workerGroup);
+    this.operatorGroup = new THREE.Group(); this.worldGroup.add(this.operatorGroup); // machine crews
+    this.operators = {};                                                              // keyed by machine id
     this.gathererGroup = new THREE.Group(); scene.add(this.gathererGroup);
     this.animalGroup = new THREE.Group(); scene.add(this.animalGroup);
     this.fxGroup = new THREE.Group(); scene.add(this.fxGroup);
@@ -123,6 +140,12 @@ export class Renderer {
     this._ray = new THREE.Raycaster(); this._groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     const hi = new THREE.Mesh(new THREE.PlaneGeometry(TILE * 0.96, TILE * 0.96), new THREE.MeshBasicMaterial({ color: 0x6fe06f, transparent: true, opacity: 0.42, depthWrite: false }));
     hi.rotation.x = -Math.PI / 2; hi.position.y = 0.05; hi.visible = false; scene.add(hi); this.tileHi = hi;
+    // reusable pool of up to 4 footprint-preview quads (green ok / red blocked)
+    this.fpPool = [];
+    for (let i = 0; i < 4; i++) {
+      const q = new THREE.Mesh(new THREE.PlaneGeometry(TILE * 0.96, TILE * 0.96), new THREE.MeshBasicMaterial({ color: 0x6fe06f, transparent: true, opacity: 0.42, depthWrite: false }));
+      q.rotation.x = -Math.PI / 2; q.position.y = 0.05; q.visible = false; scene.add(q); this.fpPool.push(q);
+    }
     this._dustTex = this._softTex();
     this._black = new THREE.MeshStandardMaterial({ color: 0x15151b, roughness: 0.5 }); // dot eyes
     this._eyeGeo = new THREE.BoxGeometry(0.06, 0.08, 0.04);
@@ -337,6 +360,45 @@ export class Renderer {
     }
     return grp;
   }
+  // small held-tool props for staff/gatherers (box/cylinder primitives, flat-shaded).
+  // returns a THREE.Group; the caller positions/parents it on a hand.
+  _makeProp(kind) {
+    const P = ROLE_PALETTE, g = new THREE.Group();
+    if (kind === "chisel") {
+      const sh = this._box(0.05, 0.22, 0.05, P.copper, 0); g.add(sh);
+      const tip = this._box(0.06, 0.05, 0.06, 0xd8d8dc, 0.13); g.add(tip);
+    } else if (kind === "mallet") {
+      const h = this._box(0.04, 0.26, 0.04, P.wood, 0); g.add(h);
+      const head = this._box(0.16, 0.12, 0.12, P.wood, 0.16); g.add(head);
+    } else if (kind === "rod") {
+      const r = this._box(0.035, 0.9, 0.035, 0xe8dcb0, 0); g.add(r);
+      for (let i = -1; i <= 1; i++) { const m = this._box(0.05, 0.012, 0.05, 0x6e4a2a, i * 0.28); g.add(m); }
+    } else if (kind === "scroll") {
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.34, 8), this._mat(P.scroll)); body.rotation.z = Math.PI / 2; g.add(body);
+      for (const s of [0.17, -0.17]) { const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.05, 8), this._mat(0x9a6b3a)); cap.rotation.z = Math.PI / 2; cap.position.x = s; g.add(cap); }
+    } else if (kind === "ankh") {
+      const st = this._box(0.04, 0.34, 0.04, P.gold, 0.05); g.add(st);
+      const cross = this._box(0.22, 0.04, 0.04, P.gold, 0.16); g.add(cross);
+      const loop = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.022, 6, 10), this._mat(P.gold)); loop.position.y = 0.28; g.add(loop);
+    } else if (kind === "whip") {
+      const handle = this._box(0.04, 0.5, 0.04, P.wood, 0); g.add(handle);
+      const lash = this._box(0.025, 0.4, 0.025, 0x3a2517, -0.34); lash.rotation.z = 0.5; g.add(lash);
+    } else if (kind === "rope") {
+      const r = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.5, 6), this._mat(0xb89a5a)); r.rotation.x = 0.5; g.add(r);
+    } else if (kind === "axe") {
+      const h = this._box(0.04, 0.5, 0.04, P.wood, 0); g.add(h);
+      const blade = this._box(0.04, 0.18, 0.16, 0xc9d0d6, 0.22); blade.position.z = 0.08; g.add(blade);
+    } else if (kind === "pick") {
+      const h = this._box(0.04, 0.5, 0.04, P.wood, 0); g.add(h);
+      const head = this._box(0.5, 0.05, 0.05, 0x9aa0a8, 0.24); head.rotation.z = 0.2; g.add(head);
+    } else if (kind === "sickle") {
+      const h = this._box(0.04, 0.34, 0.04, P.wood, 0); g.add(h);
+      const blade = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.018, 6, 8, Math.PI), this._mat(0xc9d0d6)); blade.position.y = 0.18; blade.rotation.z = Math.PI / 2; g.add(blade);
+    } else if (kind === "jar") {
+      const j = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.11, 0.2, 8), this._mat(0xc77b46)); j.position.y = 0.1; g.add(j);
+    }
+    return g;
+  }
   // canvas badge that floats over a building: produce colour + tier pips
   _badgeTex(res, tier) {
     if (!this._badges) this._badges = {};
@@ -434,6 +496,9 @@ export class Renderer {
       this._layoutWonder = state.wonderIndex;
       while (this.worldGroup.children.length) this.worldGroup.remove(this.worldGroup.children[0]);
       while (this.billboardGroup.children.length) this.billboardGroup.remove(this.billboardGroup.children[0]);
+      // operatorGroup lives under worldGroup → was just removed; reset its crews and re-attach
+      while (this.operatorGroup.children.length) this.operatorGroup.remove(this.operatorGroup.children[0]);
+      this.operators = {}; this.worldGroup.add(this.operatorGroup);
       this.tileModels = {}; this.machineSlots = {}; this._camps = null; this._layoutReady = false; this.plops.length = 0;
     }
     this._refreshBuildings(state);
@@ -462,7 +527,7 @@ export class Renderer {
       }
     }
     // diff against rendered models
-    for (const k in this.tileModels) if (desired[k] !== this.tileModels[k].id) { const tm = this.tileModels[k]; this.worldGroup.remove(tm.grp); if (tm.ring) this.worldGroup.remove(tm.ring); if (tm.badge) this.billboardGroup.remove(tm.badge); delete this.tileModels[k]; }
+    for (const k in this.tileModels) if (desired[k] !== this.tileModels[k].id) { const tm = this.tileModels[k]; this.worldGroup.remove(tm.grp); if (tm.ring) this.worldGroup.remove(tm.ring); if (tm.slab) this.worldGroup.remove(tm.slab); if (tm.badge) this.billboardGroup.remove(tm.badge); delete this.tileModels[k]; }
     for (const k in desired) {
       if (this.tileModels[k]) continue;
       const [gx, gz] = k.split(",").map(Number), id = desired[k], sz = SIZE[id] || [1, 1];
@@ -475,7 +540,13 @@ export class Renderer {
       const res = this._badgeResFor(id), baseY = 1.9 + (Math.max(sz[0], sz[1]) - 1) * 0.9;
       const badge = new THREE.Sprite(new THREE.SpriteMaterial({ map: this._badgeTex(res, 1), transparent: true })); badge.scale.set(0.95, 0.95, 1); badge.position.set(cx, baseY, cz);
       this.billboardGroup.add(badge);
-      this.tileModels[k] = { id, grp, scale: fs, tier: 1, ring: null, badge, badgeRes: res, baseY };
+      // multi-tile footprint → thin translucent ground slab showing the building size
+      let slab = null;
+      if (sz[0] * sz[1] > 1) {
+        slab = new THREE.Mesh(new THREE.PlaneGeometry(sz[0] * TILE * 0.96, sz[1] * TILE * 0.96), new THREE.MeshBasicMaterial({ color: 0x70593a, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide }));
+        slab.rotation.x = -Math.PI / 2; slab.position.set(cx, 0.04, cz); this.worldGroup.add(slab);
+      }
+      this.tileModels[k] = { id, grp, scale: fs, tier: 1, ring: null, slab, badge, badgeRes: res, baseY };
       if (this._layoutReady) { grp.scale.setScalar(0.01); this.plops.push({ grp, t: 0, target: fs }); this.spawnDust(new THREE.Vector3(gx * TILE, 0.3, gz * TILE), 6); this.ring(new THREE.Vector3(gx * TILE, 0.05, gz * TILE), 0xffe0a0); }
       else grp.scale.setScalar(fs);
     }
@@ -515,7 +586,28 @@ export class Renderer {
     this.tileHi.visible = true; this.tileHi.position.set(t.gx * TILE, 0.05, t.gz * TILE);
     return t;
   }
-  plopAt(gx, gz) { this.spawnDust(new THREE.Vector3(gx * TILE, 0.3, gz * TILE), 8); this.ring(new THREE.Vector3(gx * TILE, 0.05, gz * TILE), 0xffe0a0); this.kick(0.18); this.tileHi.visible = false; }
+  // multi-cell footprint preview for the build picker: green if every cell is
+  // in-bounds AND unoccupied, red otherwise. Falls back to hoverTile when no id.
+  hoverFootprint(sx, sy, id) {
+    for (const q of this.fpPool) q.visible = false;
+    if (id == null) return this.hoverTile(sx, sy);
+    this.tileHi.visible = false;
+    const tile = (sx == null) ? null : this.tileAt(sx, sy);
+    if (!tile) return null;
+    const cells = footprintCells(id, tile.gx, tile.gz);
+    let ok = true;
+    for (const [x, z] of cells) {
+      const k = x + "," + z;
+      if (!this._buildSet.has(k) || this._occupied.has(k) || this._nodeTiles.has(k)) { ok = false; break; }
+    }
+    const col = ok ? 0x6fe06f : 0xe0563f;
+    for (let i = 0; i < cells.length && i < this.fpPool.length; i++) {
+      const q = this.fpPool[i], [x, z] = cells[i];
+      q.material.color.setHex(col); q.position.set(x * TILE, 0.05, z * TILE); q.visible = true;
+    }
+    return { gx: tile.gx, gz: tile.gz, ok };
+  }
+  plopAt(gx, gz) { this.spawnDust(new THREE.Vector3(gx * TILE, 0.3, gz * TILE), 8); this.ring(new THREE.Vector3(gx * TILE, 0.05, gz * TILE), 0xffe0a0); this.kick(0.18); this.tileHi.visible = false; for (const q of this.fpPool) q.visible = false; }
   _updatePlops(dt) {
     for (let i = this.plops.length - 1; i >= 0; i--) {
       const p = this.plops[i]; p.t += dt * 3.4; const tg = p.target || 1;
@@ -618,6 +710,9 @@ export class Renderer {
     const w = this._makeWorker();
     w.grp.scale.setScalar(0.72);
     if (w.block) w.block.material.color.setHex(NODE_COL[res] || 0xcfcfcf);
+    // give the gatherer a resource-appropriate tool in the right hand
+    const kind = { wood: "axe", granite: "pick", copper: "pick", limestone: "pick", food: "sickle", water: "jar" }[res] || null;
+    if (kind && w.armR) { const tool = this._makeProp(kind); tool.position.set(0, -0.46, 0.04); w.armR.add(tool); w.props.tool = tool; }
     w.res = res; w.gstate = "toNode"; w.node = null; w.gtimer = 0; w.home = null;
     return w;
   }
@@ -677,7 +772,7 @@ export class Renderer {
     for (const s of [0.45, -0.45]) { const r = this._box(0.12, 0.12, 1.8, 0x553820, 0.08); r.position.x = s; grp.add(r); }
     const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.5, 0), this._mat(0xcdbb95)); rock.position.y = 0.62; rock.castShadow = true; grp.add(rock);
     const pullers = [];
-    for (let i = 0; i < 2; i++) { const p = this._makeWorker(); p.grp.scale.setScalar(0.72); p.grp.position.set(i ? 0.28 : -0.28, 0, 1.2 + i * 0.4); grp.add(p.grp); pullers.push(p); }
+    for (let i = 0; i < 2; i++) { const p = this._makeWorker(); p.grp.scale.setScalar(0.72); p.grp.position.set(i ? 0.28 : -0.28, 0, 1.2 + i * 0.4); const rope = this._makeProp("rope"); rope.position.set(0, -0.46, 0.06); p.armL.add(rope); p.props.rope = rope; grp.add(p.grp); pullers.push(p); }
     return { grp, rock, pullers, state: "toYard", timer: 0, phase: Math.random() * TAU };
   }
   _buildSupply(state) {
@@ -692,7 +787,7 @@ export class Renderer {
     const table = this._box(1.05, 0.42, 1.15, 0x8a5e34, 0.21); grp.add(table);
     const rough = new THREE.Mesh(new THREE.DodecahedronGeometry(0.44, 0), this._mat(0xcdbb95)); rough.position.y = 0.66; rough.castShadow = true; grp.add(rough);
     const brick = this._box(0.5, 0.42, 0.5, 0xe7d6ad, 0.66); brick.visible = false; grp.add(brick);
-    const cutter = this._makeWorker(); cutter.grp.scale.setScalar(0.8); cutter.grp.position.set(0, 0, 0.95); cutter.grp.rotation.y = Math.PI; grp.add(cutter.grp);
+    const cutter = this._makeWorker("mason"); cutter.grp.scale.setScalar(0.8); cutter.grp.position.set(0, 0, 0.95); cutter.grp.rotation.y = Math.PI; grp.add(cutter.grp);
     const stack = []; for (let i = 0; i < 6; i++) { const bk = this._box(0.46, 0.4, 0.46, 0xe3d3aa, 0); bk.position.set(-1.1, 0.2 + Math.floor(i / 2) * 0.42, -0.4 + (i % 2) * 0.6); bk.visible = false; grp.add(bk); stack.push(bk); }
     this.cutter = { grp, rough, brick, cutter, stack, x: yardX, z: yardZ, t: 0, stockN: 2 };
     this._yard = new THREE.Vector3(yardX, 0, yardZ);
@@ -733,10 +828,112 @@ export class Renderer {
     for (let i = 0; i < cs.stack.length; i++) cs.stack[i].visible = i < cs.stockN;
   }
 
+  // ---------- machine operators (dedicated pool, scales with owned machines) ----------
+  // per-machine operator spec: role list (cap derived from list length × slots) + animator
+  _opSpec(id) {
+    const SPEC = {
+      wooden_rollers: { roles: ["laborer", "laborer"], cap: 6 },
+      rope_winch: { roles: ["laborer", "laborer"], cap: 4 },
+      sled: { roles: ["laborer", "laborer", "engineer"], cap: 6 },
+      crane: { roles: ["engineer", "laborer"], cap: 4 },
+      lubrication: { roles: ["laborer"], cap: 3 },
+      massive_ramp: { roles: ["overseer", "laborer"], cap: 4 },
+      elevator: { roles: ["laborer", "laborer"], cap: 4 },
+      marvel: { roles: ["priest", "priest"], cap: 4 },
+    };
+    return SPEC[id] || { roles: ["laborer"], cap: 2 };
+  }
+  _updateOperators(state, stats, dt) {
+    const rateScale = 0.5 + Math.min(2, (stats.buildRate || 0) * 0.05);
+    const whip = !!(state.whip && state.whip.boostT > 0);
+    const rate = rateScale * (whip ? 1.4 : 1);
+    for (const id in this.machineSlots) {
+      const slots = this.machineSlots[id]; const spec = this._opSpec(id);
+      let pool = this.operators[id]; if (!pool) pool = this.operators[id] = [];
+      // desired operators = roles-per-machine × number of machines, capped
+      const want = Math.min(spec.cap, slots.length * spec.roles.length);
+      while (pool.length < want) {
+        const idx = pool.length, role = spec.roles[idx % spec.roles.length];
+        const w = this._makeWorker(role); w.grp.scale.setScalar(role === "overseer" ? 0.86 : 0.7);
+        w.opPhase = Math.random() * TAU; this.operatorGroup.add(w.grp); pool.push(w);
+      }
+      while (pool.length > want) { const w = pool.pop(); this.operatorGroup.remove(w.grp); }
+      // position each operator around its machine slot and animate by machine type
+      for (let i = 0; i < pool.length; i++) {
+        const w = pool[i], role = spec.roles[i % spec.roles.length];
+        const machine = slots[Math.floor(i / spec.roles.length) % Math.max(1, slots.length)];
+        if (!machine) continue;
+        const seat = i % spec.roles.length;            // which station at this machine
+        const base = machine.position;
+        w.phase += dt * rate; w.opPhase += dt * rate;
+        this._opAnim(id, w, role, seat, base, dt, rate, machine);
+      }
+    }
+  }
+  _opAnim(id, w, role, seat, base, dt, rate, machine) {
+    const ph = w.phase, op = w.opPhase;
+    const place = (dx, dz, face) => { w.grp.position.set(base.x + dx, 0, base.z + dz); w.grp.rotation.y = face != null ? face : Math.atan2(-dx, -dz); };
+    // reset arms toward neutral each frame via spring helper
+    const arm = (l, r) => { w.aL += (l - w.aL) * 0.3; w.aR += (r - w.aR) * 0.3; w.armL.rotation.x = w.aL; w.armR.rotation.x = w.aR; };
+    const stride = (amp) => { const s = Math.sin(ph * 8) * amp; w.legL.rotation.x = s; w.legR.rotation.x = -s; };
+    w.block && (w.block.visible = false);
+    if (id === "wooden_rollers") {                        // walk-push, low lean; logs spin
+      place(seat ? 0.34 : -0.34, 0.7, 0); stride(0.5);
+      w.body.rotation.x = 0.5; arm(-1.2, -1.2);
+      for (const c of machine.children) if (c.geometry && c.geometry.type === "CylinderGeometry") c.rotation.x += dt * rate * 3;
+    } else if (id === "rope_winch") {                     // alternating rope-haul; wheel spins
+      const a = seat === 0; const pull = Math.sin(ph * 5 + (a ? 0 : Math.PI));
+      place(a ? -0.4 : 0.4, 0.6, 0); stride(0.2 + Math.max(0, pull) * 0.3);
+      w.body.rotation.x = 0.3 + Math.max(0, pull) * 0.3; arm(-1.0 - Math.max(0, pull) * 0.8, -1.0 - Math.max(0, pull) * 0.8);
+      const wheel = machine.children.find((c) => c.geometry && c.geometry.type === "CylinderGeometry"); if (wheel) wheel.rotation.x += dt * rate * 2.4;
+    } else if (id === "sled") {
+      if (role === "engineer") {                          // kneels & pours water at runner
+        place(0.0, -0.7, Math.PI); w.body.rotation.x = 0.7; w.legL.rotation.x = -1.2; w.legR.rotation.x = -1.2;
+        arm(-1.4 + Math.sin(op * 4) * 0.4, -1.4 + Math.cos(op * 4) * 0.4);
+      } else { place(seat ? 0.34 : -0.34, 0.8, 0); stride(0.5); w.body.rotation.x = 0.45; arm(-1.1, -1.1); }
+    } else if (id === "crane") {
+      if (role === "engineer") {                          // circular crank
+        place(0.5, 0.4, -0.6); w.aL = -1.2 + Math.sin(op * 5) * 0.6; w.aR = -1.2 + Math.cos(op * 5) * 0.6;
+        w.armL.rotation.x = w.aL; w.armR.rotation.x = w.aR; w.body.rotation.x = 0.15;
+        const cw = machine.children.find((c) => c.position.x < -0.5); if (cw) cw.position.y = 1.42 + Math.sin(op * 5) * 0.18; // counterweight bob
+      } else { place(-0.6, 0.5, 0); arm(-1.6, -1.6); w.body.rotation.x = 0.2; }  // laborer steadies rope
+    } else if (id === "lubrication") {                    // kneeling, sweeping arm
+      place(0.0, 0.55, 0); w.legL.rotation.x = -1.1; w.legR.rotation.x = -1.1; w.body.rotation.x = 0.5;
+      const s = Math.sin(op * 4); arm(-1.3 + s * 0.5, -1.3 - s * 0.5);
+      if (Math.random() < dt * rate * 2) this.spawnChips(w.grp.getWorldPosition(this._tmpV).setY(0.3), 0x6fc7e0, 1);
+    } else if (id === "massive_ramp") {                   // overseer semaphore; head scans
+      place(seat ? 0.5 : -0.5, 0.5, 0);
+      if (role === "overseer") { const a = Math.sin(op * 3); w.armL.rotation.x = -2.6 + a * 0.5; w.armR.rotation.x = -0.4 - a * 0.5; w.aL = w.armL.rotation.x; w.aR = w.armR.rotation.x; w.head.rotation.y = Math.sin(op * 1.2) * 0.5; }
+      else { stride(0.1); arm(-0.3, -0.3); }
+    } else if (id === "elevator") {                       // synchronized deep platform-pulls
+      const pull = Math.max(0, Math.sin(op * 4));
+      place(seat ? 0.4 : -0.4, 0.5, 0); w.body.rotation.x = 0.2 + pull * 0.4; arm(-0.6 - pull * 1.4, -0.6 - pull * 1.4);
+      stride(pull * 0.2);
+    } else if (id === "marvel") {                          // robed slow raised-arm sway; emissive pulse
+      place(seat ? 0.5 : -0.5, 0.6, 0); const s = Math.sin(op * 1.2);
+      w.body.rotation.z = s * 0.08; w.armL.rotation.x = -2.3 + s * 0.2; w.armR.rotation.x = -2.3 - s * 0.2; w.aL = w.armL.rotation.x; w.aR = w.armR.rotation.x;
+      for (const c of machine.children) if (c.material && c.material.emissive !== undefined) c.material.emissiveIntensity = 0.3 + 0.3 * (0.5 + 0.5 * s);
+    } else { place(0, 0.6, 0); stride(0.3); arm(-0.4, -0.4); }
+    w.body.scale.y = 1 + Math.sin(w.breathe + ph * 2.4) * 0.05;
+  }
+
+  // counts straight from state.workers (render-derived only, nothing persisted)
+  _roleCounts(state) {
+    const w = state.workers || {};
+    return { laborer: w.laborer || 0, mason: w.mason || 0, engineer: w.engineer || 0,
+      priest: w.priest || 0, architect: w.architect || 0, overseer: w.overseer || 0 };
+  }
+
   // ---------- worker model ----------
-  _makeWorker() {
+  // role ∈ {laborer, mason, engineer, priest, architect, overseer}. Builds the shared
+  // base body then attaches role-specific costume/props so each reads at iso distance.
+  _makeWorker(role = "laborer") {
+    const P = ROLE_PALETTE;
     const i = (Math.random() * SKINS.length) | 0;
-    const skin = this._mat(SKINS[i]), cloth = this._mat(CLOTHS[(Math.random() * CLOTHS.length) | 0]), kilt = this._mat(0xefe7d2);
+    const skin = this._mat(SKINS[i]), kilt = this._mat(0xefe7d2);
+    // nemes band colour: architect blue trim, priest blue stripe, else random cloth
+    const bandCol = (role === "architect" || role === "priest") ? P.trim : CLOTHS[(Math.random() * CLOTHS.length) | 0];
+    const cloth = this._mat(bandCol);
     const linen = this._mat(0xf2ead2);                 // headcloth linen
     const grp = new THREE.Group();
     // legs + sandalled feet
@@ -757,21 +954,57 @@ export class Renderer {
     const crown = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.14, 0.3), linen); crown.position.y = 0.16; head.add(crown);
     const band = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.06, 0.31), cloth); band.position.y = 0.08; head.add(band);
     const back = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.2, 0.1), linen); back.position.set(0, 0.0, -0.13); head.add(back);
-    for (const sx of [0.17, -0.17]) { const lap = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.22, 0.2), linen); lap.position.set(sx, -0.05, 0.02); head.add(lap); }
+    const lap = [];
+    for (const sx of [0.17, -0.17]) { const lp = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.22, 0.2), linen); lp.position.set(sx, -0.05, 0.02); head.add(lp); lap.push(lp); }
     // arms + hands
     const armL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.42, 0.12), skin); armL.geometry.translate(0, -0.21, 0); armL.position.set(0.26, 0.96, 0); armL.castShadow = true;
     const handL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.12, 0.14), skin); handL.position.set(0, -0.44, 0); armL.add(handL);
     const armR = armL.clone(); armR.position.x = -0.26;
+    const handR = armR.children[0];
     // carried cut-limestone block, hugged against the chest so the face stays visible
     const block = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.28, 0.3), this._mat(0xe3d3aa)); block.position.set(0, 0.84, 0.38); block.visible = false; block.castShadow = true;
     const blockTop = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.05, 0.32), this._mat(0xf2e6c2)); blockTop.position.y = 0.15; block.add(blockTop);
     const blockEdge = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.05, 0.32), this._mat(0xb9a373)); blockEdge.position.y = -0.14; block.add(blockEdge);
     grp.add(legL, legR, body, kiltM, head, armL, armR, block);
-    grp.scale.setScalar(0.8);
-    return { grp, legL, legR, armL, armR, block, body, head,
+
+    // ---- role-specific costume + props ----
+    const props = {};
+    const noCarry = (role === "priest" || role === "overseer" || role === "architect" || role === "engineer");
+    if (role === "mason") {
+      const apron = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.06), this._mat(P.apron)); apron.position.set(0, -0.02, 0.16); body.add(apron);
+      const hb = new THREE.Mesh(new THREE.BoxGeometry(0.33, 0.07, 0.32), this._mat(P.headband)); hb.position.y = 0.04; head.add(hb);
+      crown.visible = false; band.visible = false; back.visible = false; for (const l of lap) l.visible = false; // bare-headed but for the band
+      const chisel = this._makeProp("chisel"); chisel.position.set(0, -0.44, 0.05); armL.add(chisel); props.chisel = chisel;
+      const mallet = this._makeProp("mallet"); mallet.position.set(0, -0.44, 0.05); armR.add(mallet); props.mallet = mallet;
+    } else if (role === "engineer") {
+      const cape = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.2, 0.34), this._mat(P.cape)); cape.position.set(0, 0.16, 0); body.add(cape);
+      crown.scale.set(1, 0.6, 1); crown.material = this._mat(P.hat); back.visible = false; for (const l of lap) l.visible = false; // flat scribe cap
+      const rod = this._makeProp("rod"); rod.position.set(0, -0.5, 0.04); rod.rotation.x = 0.2; armR.add(rod); props.rod = rod;
+    } else if (role === "priest") {
+      // full-length tapered robe replaces bare legs; priest never shows a block
+      legL.visible = false; legR.visible = false; kiltM.visible = false;
+      const robe = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.95, 0.3), this._mat(P.robe)); robe.geometry.translate(0, -0.475, 0); robe.scale.set(1, 1, 1); robe.position.y = 0.55; robe.castShadow = true; grp.add(robe);
+      robe.scale.x = 1; // taper handled by extra hem
+      const hem = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.12, 0.4), this._mat(P.robe)); hem.position.y = 0.06; grp.add(hem);
+      const pectoral = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.16, 0.06), this._mat(P.pectoral)); pectoral.position.set(0, 0.12, 0.13); body.add(pectoral);
+      const ankh = this._makeProp("ankh"); ankh.position.set(0, -0.46, 0.04); armR.add(ankh); props.ankh = ankh;
+    } else if (role === "architect") {
+      const trimM = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.07, 0.32), this._mat(P.trim)); trimM.position.y = 0.55 + 0.1; kiltM.add(trimM); trimM.position.set(0, 0.1, 0);
+      const scroll = this._makeProp("scroll"); scroll.position.set(0, -0.46, 0.06); armL.add(scroll); props.scroll = scroll;
+      const rod = this._makeProp("rod"); rod.position.set(0, -0.5, 0.04); rod.rotation.x = 0.15; armR.add(rod); props.rod = rod;
+    } else if (role === "overseer") {
+      crown.visible = false; band.visible = false; back.visible = false; for (const l of lap) l.visible = false;
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.4, 8), this._mat(P.hat)); cone.position.y = 0.28; head.add(cone);
+      const sash = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.12, 0.3), this._mat(P.sash)); sash.position.set(0, 0.02, 0); sash.rotation.z = 0.5; body.add(sash);
+      const whipP = this._makeProp("whip"); whipP.position.set(0, -0.46, 0.04); armR.add(whipP); props.whip = whipP;
+    }
+
+    grp.scale.setScalar(role === "overseer" ? 1.0 : 0.8);
+    return { grp, legL, legR, armL, armR, handL, handR, block, body, head, kiltM, lap, role,
       state: "fetch", target: -1, p: 0, phase: Math.random() * TAU, timer: Math.random() * 1.2, placed: false,
       lane: (Math.random() - 0.5) * 3.2, foot: Math.random() * 4, whipT: 0,
-      aL: 0, aR: 0, breathe: Math.random() * TAU };
+      aL: 0, aR: 0, breathe: Math.random() * TAU, noCarry, props,
+      idleT: Math.random() * 5, idleAnim: -1, idleP: 0 };
   }
 
   // ---------- animal models ----------
@@ -874,6 +1107,7 @@ export class Renderer {
     this._updatePyramid(state);
     this._updateWorkers(state, stats, dt);
     this._updateSupply(state, stats, dt);
+    this._updateOperators(state, stats, dt);
     this._updateGatherers(state, stats, dt);
     this._updatePlops(dt);
     for (const k in this.tileModels) { const tm = this.tileModels[k]; if (tm.badge) tm.badge.position.y = tm.baseY + Math.sin(state.clock * 2 + tm.baseY * 3) * 0.12; } // bob badges
@@ -908,8 +1142,31 @@ export class Renderer {
 
     // show as many workers as you actually have (0 when you have none), capped for perf
     const target = state.complete ? 8 : Math.min(40, Math.max(0, Math.round(stats.builders || 0)));
-    while (this.workers.length < target) { const w = this._makeWorker(); this.workerGroup.add(w.grp); this.workers.push(w); }
+    while (this.workers.length < target) { const w = this._makeWorker("laborer"); this.workerGroup.add(w.grp); this.workers.push(w); }
     while (this.workers.length > target) { const w = this.workers.pop(); this.workerGroup.remove(w.grp); }
+
+    // layer a small CAPPED set of visible elites onto the laborer pool (NOT subtracted
+    // from haul count): recolor/reprop a slot ONLY when its role actually changes.
+    const rc = this._roleCounts(state);
+    let slotsTotal = 0; for (const id in this.machineSlots) slotsTotal += this.machineSlots[id].length;
+    const elite = [];
+    const pushN = (role, n) => { for (let i = 0; i < n; i++) elite.push(role); };
+    pushN("overseer", Math.min(rc.overseer, 3));
+    pushN("architect", Math.min(rc.architect, 2));
+    pushN("mason", Math.min(rc.mason, 4));
+    pushN("priest", Math.min(rc.priest, 3));
+    pushN("engineer", Math.min(rc.engineer, slotsTotal)); // engineers staff machines via _updateOperators; only spare ones walk the ramp
+    // assign desired roles: elites occupy the FIRST slots, everyone else laborer
+    for (let i = 0; i < this.workers.length; i++) {
+      const want = i < elite.length ? elite[i] : "laborer";
+      const w = this.workers[i];
+      if (w.role !== want) {                                    // role changed → rebuild that slot
+        const nw = this._makeWorker(want);
+        nw.state = w.state; nw.p = w.p; nw.cell = w.cell; nw.timer = w.timer; nw.placed = w.placed;
+        nw.lane = w.lane; nw.foot = w.foot; nw.grp.position.copy(w.grp.position); nw.grp.rotation.copy(w.grp.rotation);
+        this.workerGroup.remove(w.grp); this.workerGroup.add(nw.grp); this.workers[i] = nw;
+      }
+    }
 
     const whip = !!(state.whip && state.whip.boostT > 0);
     const moveBase = 0.30 + Math.min(1.0, (stats.buildRate || 0) * 0.028);   // slower, deliberate
@@ -951,21 +1208,119 @@ export class Renderer {
       // face direction of travel
       const fx2 = (w.state === "haul" || w.state === "place") ? cell.x : footX, fz2 = (w.state === "haul" || w.state === "place") ? cell.z : footZ;
       w.grp.rotation.y = Math.atan2((fx2 - px) || 0.0001, (fz2 - pz) || 0.0001);
-      const sw = Math.sin(w.phase * 8) * (walk ? 0.7 * walk + 0.15 : 0.05);
-      w.legL.rotation.x = sw; w.legR.rotation.x = -sw;
-      const tAL = carry ? -1.35 : -sw, tAR = carry ? -1.35 : sw;
-      w.aL += (tAL - w.aL) * 0.25; w.aR += (tAR - w.aR) * 0.25;     // springy arm follow-through
-      w.armL.rotation.x = w.aL; w.armR.rotation.x = w.aR;
-      w.body.rotation.x = bend * 0.9;
-      w.body.scale.y = 1 + Math.sin(w.breathe + w.phase * 2.4) * 0.045;            // breathing
-      w.head.rotation.x = bend * 0.5 + Math.sin(w.phase * 4) * 0.05 * (walk ? 1 : 0.3); // head bob
-      w.block.visible = carry;
-      w.grp.position.y += bend * -0.15 + Math.sin(w.phase * 8) * 0.025 * walk;     // gait bob
-      if (w.whipT > 0) w.grp.position.y += Math.abs(Math.sin(w.phase * 20)) * 0.05;
+
+      // priests never carry a block (visual law)
+      if (w.noCarry) carry = false;
+      this._animWorker(w, dt, { walk, carry, bend, speed: walk, state: w.state, ms });
 
       // project to screen for whip hit-testing
       this._tmpV.set(px, py + 0.6, pz).project(this.cam);
       this.workerHits.push({ x: (this._tmpV.x * 0.5 + 0.5) * this.vw, y: (-this._tmpV.y * 0.5 + 0.5) * this.vh, w });
+    }
+  }
+
+  // shared worker body animation: stride gait, hip/shoulder counter-rotation,
+  // opposite-arm swing, discrete idle variety, secondary motion, action poses,
+  // and per-role overlays. opt = {walk, carry, bend, speed, state, ms}
+  _animWorker(w, dt, opt) {
+    const walk = opt.walk || 0, carry = !!opt.carry, bend = opt.bend || 0;
+    const st = opt.state || w.state;
+    // stride faster on haul climb, normal otherwise
+    const stride = st === "haul" ? 10 : 8;
+    const speed = walk; // 0..1 locomotion amount
+    const ph = w.phase;
+    const phL = ph * stride, phR = ph * stride + Math.PI;
+
+    // legs OUT OF PHASE
+    w.legL.rotation.x = Math.sin(phL) * (0.7 * speed + 0.05);
+    w.legR.rotation.x = Math.sin(phR) * (0.7 * speed + 0.05);
+
+    // hip/shoulder counter-rotation
+    const twist = Math.sin(phL) * 0.18 * speed;
+    w.body.rotation.y = twist;
+    w.head.rotation.y = -twist * 0.5;
+
+    // arms opposite to same-side leg (carry pose pins both arms up to hug block)
+    const tAL = carry ? -1.35 : Math.sin(phR) * 0.5 * speed;
+    const tAR = carry ? -1.35 : Math.sin(phL) * 0.5 * speed;
+    w.aL += (tAL - w.aL) * 0.25; w.aR += (tAR - w.aR) * 0.25;
+    w.armL.rotation.x = w.aL; w.armR.rotation.x = w.aR;
+
+    // base torso lean from action poses
+    let bodyLean = bend * 0.9;
+    if (st === "haul") bodyLean += 0.25;        // lean into slope
+    else if (st === "return") bodyLean += -0.15; // lean back slightly
+    w.body.rotation.x = bodyLean;
+
+    // effort breathing amp scales with state
+    const breAmp = carry ? 0.08 : speed > 0.1 ? 0.06 : 0.045;
+    w.body.scale.y = 1 + Math.sin(w.breathe + ph * 2.4) * breAmp;
+
+    // head bob / down-look on place
+    w.head.rotation.x = bend * 0.5 + Math.sin(ph * 4) * 0.05 * (speed > 0.1 ? 1 : 0.3);
+
+    // secondary motion: kilt swing, lappet lag, carried block bob+tilt
+    if (w.kiltM && w.kiltM.visible) w.kiltM.rotation.x = Math.sin(phL - 0.6) * 0.12 * speed;
+    if (w.lap) for (const l of w.lap) if (l.visible) l.rotation.x = -w.head.rotation.y * 0.4 + Math.sin(phL - 0.9) * 0.06 * speed;
+    if (w.block) {
+      w.block.visible = carry;
+      if (carry) { w.block.position.y = 0.84 + Math.sin(ph * 8) * 0.02; w.block.rotation.z = Math.sin(phL) * 0.05; }
+    }
+
+    // gait bob + squat-on-place dip
+    let yoff = bend * -0.15 + Math.sin(phL) * 0.025 * speed;
+    if (st === "place") yoff += -bend * 0.12;   // squat-and-set: knees bend, body drops
+    w.grp.position.y += yoff;
+    if (w.whipT > 0) w.grp.position.y += Math.abs(Math.sin(ph * 20)) * 0.05;
+
+    // discrete idle variety when essentially still
+    if (speed < 0.1 && st !== "place") {
+      w.idleT -= dt;
+      if (w.idleAnim < 0 || w.idleT <= 0) {
+        if (w.idleP >= 1 || w.idleAnim < 0) { w.idleAnim = (Math.random() * 4) | 0; w.idleP = 0; w.idleT = 2.5 + Math.random() * 4; }
+      }
+      if (w.idleAnim >= 0 && w.idleT <= 1.0) {     // play the chosen gesture once
+        w.idleP = Math.min(1, w.idleP + dt * 1.6);
+        const e = Math.sin(w.idleP * Math.PI);     // ease in/out
+        if (w.idleAnim === 0) { w.armR.rotation.x = -2.4 * e; w.head.rotation.x += 0.2 * e; }       // brow-wipe
+        else if (w.idleAnim === 1) { w.armL.rotation.x = -2.6 * e; w.armR.rotation.x = -2.6 * e; w.body.rotation.x = -0.15 * e; } // stretch
+        else if (w.idleAnim === 2) { w.head.rotation.y = Math.sin(w.idleP * TAU) * 0.5; }            // look-around
+        else { w.grp.position.x += Math.sin(w.idleP * Math.PI) * 0; w.body.rotation.z = 0.08 * e; w.legL.rotation.x = 0.1 * e; } // weight-shift
+      } else { w.idleP = 0; }
+    }
+
+    this._roleOverlay(w, dt, { speed, carry, state: st });
+  }
+
+  // per-role pose overlays applied after base animation
+  _roleOverlay(w, dt, opt) {
+    const ph = w.phase, idle = opt.speed < 0.1;
+    if (w.role === "overseer") {
+      // upright + periodic staff crack via whipT (set by whipAt)
+      w.body.rotation.x *= 0.4;
+      if (w.whipT > 0) { const k = Math.sin((2.6 - w.whipT) * 12); w.armR.rotation.x = -1.6 - Math.max(0, k) * 1.3; }
+      else if (idle) w.armR.rotation.x = -0.4 + Math.sin(ph * 1.4) * 0.1;
+    } else if (w.role === "architect" && idle) {
+      // holds scroll (armL), points with rod arm
+      w.armL.rotation.x = -1.0 + Math.sin(ph * 1.2) * 0.05;
+      w.armR.rotation.x = -1.3 + Math.sin(ph * 2.0) * 0.25;
+      w.head.rotation.y = Math.sin(ph * 0.8) * 0.3;
+    } else if (w.role === "engineer" && idle) {
+      // inspect-lean: bend forward studying the rod
+      w.body.rotation.x = 0.22 + Math.sin(ph * 1.5) * 0.05;
+      w.head.rotation.x += 0.3;
+      w.armR.rotation.x = -1.1 + Math.sin(ph * 1.6) * 0.1;
+    } else if (w.role === "priest") {
+      // slow sway, arms raised in blessing; never carries
+      const s = Math.sin(ph * 1.1);
+      w.body.rotation.z = s * 0.06; w.head.rotation.y = s * 0.25;
+      w.armL.rotation.x = -2.3 + s * 0.15; w.armR.rotation.x = -2.3 - s * 0.15;
+      if (w.block) w.block.visible = false;
+    } else if (w.role === "mason" && idle) {
+      // chisel taps: rhythmic mallet strikes
+      const t = Math.abs(Math.sin(ph * 6));
+      w.armR.rotation.x = -1.2 - t * 0.7; w.armL.rotation.x = -1.4;
+      w.body.rotation.x = 0.18 + t * 0.06;
     }
   }
 

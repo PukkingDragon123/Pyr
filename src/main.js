@@ -70,6 +70,13 @@ const app = {
   },
   // place a building on a grid tile
   upgrade: (id) => { const ok = upgradeBuilding(state, id); if (ok) audio.play("buy"); return ok; },
+  // celebratory burst on tier-up: ring every placed building of this type
+  upgradeFx: (id) => {
+    let any = false;
+    for (const pl of (state.placements || [])) if (pl.id === id) { renderer.plopAt(pl.gx, pl.gz); any = true; }
+    if (!any) renderer.kick(0.4);
+    renderer.whipFlash = 0.35;
+  },
   // A tap on the world: empty tile → build picker; a placed building → upgrade
   // panel; otherwise crack the whip. (Workers/camps gather; no tap-to-gather.)
   tap: (x, y) => {
@@ -125,7 +132,7 @@ canvas.addEventListener("pointerdown", (e) => {
   else if (pointers.size === 2) { const p = [...pointers.values()]; pinchDist = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y); }
 });
 canvas.addEventListener("pointermove", (e) => {
-  if (pointers.size === 0) { renderer.hoverTile(e.clientX, e.clientY); return; } // mouse hover → tile highlight
+  if (pointers.size === 0) { renderer.hoverFootprint(e.clientX, e.clientY, ui.selectedBuildId()); return; } // mouse hover → tile / footprint highlight (footprint when build picker open)
   const prev = pointers.get(e.pointerId); if (!prev) return;
   const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -196,6 +203,8 @@ function drainFx() {
       if (f.reward) { if (f.reward.legacy) ui.popup("+" + f.reward.legacy + " " + STR.legacy, "good"); }
     } else if (f.type === "level") {
       audio.play("unlock"); ui.pharaohSpeak(STR.pharaohLevel(f.level)); ui.popup(STR.level + " " + f.level + "!", "go"); renderer.whipFlash = 0.6;
+    } else if (f.type === "milestone") {
+      audio.play("unlock"); ui.milestone(f.text); renderer.kick(1.2); renderer.whipFlash = 0.5;
     }
   }
   fx.length = 0;

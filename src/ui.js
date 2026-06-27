@@ -4,7 +4,7 @@ import { STR } from "../strings.js";
 import {
   RES, RES_META, BUILDINGS, WORKERS, BLESSINGS,
   WEATHER, wonderFor, wonderGeom, blocksForLayer, UNLOCK_LEVEL, xpInfo, questFor,
-  PLACEABLE, ADJ_REQ, ADJ_LABEL, MAX_TIER, TIER_MULT,
+  PLACEABLE, ADJ_REQ, ADJ_LABEL, MAX_TIER, TIER_MULT, sizeLabel,
 } from "./data.js";
 import { costFor, canAfford, resolveQty } from "./state.js";
 import { isUnlocked, blessingCost, getLevel, placeReason, buildingTier, canUpgrade, upgradeCostFor } from "./sim.js";
@@ -154,6 +154,7 @@ export class UI {
   openBuildPicker(gx, gz) {
     this.closeUpgrade();
     this._pickTile = { gx, gz };
+    this._selectedBuildId = null; // first eligible card sets this below
     if (!this._buildSection) this._buildSection = "produce";
     const state = this.app.getState();
     this.pickerEl.innerHTML = "";
@@ -183,10 +184,17 @@ export class UI {
       else if (reason === "adjacency") note = `<span class="pk-req">⚲ ${STR.needsNear(ADJ_LABEL[ADJ_REQ[id]] || ADJ_REQ[id])}</span>`;
       it.innerHTML = `<span class="pk-ic">${icon(this._defIcon(d))}</span>
         <span class="pk-main">
-          <span class="pk-name">${d.name}${owned ? ` <span class="cnt">×${owned}</span>` : ""}<span class="pk-type">${this._catLabel(d)}</span></span>
+          <span class="pk-name">${d.name} <span class="cnt sizechip">${sizeLabel(id)}</span>${owned ? ` <span class="cnt">×${owned}</span>` : ""}<span class="pk-type">${this._catLabel(d)}</span></span>
           <span class="pk-eff">${this._effectText(d)}</span>
           <span class="pk-cost">${this._costChips(state, costFor(d, owned, 1))}</span>${note}</span>`;
       if (reason !== "") it.classList.add("disabled");
+      // Track the selected build id so the renderer can preview the footprint
+      // while the picker is open. Default to the first eligible card; update on
+      // hover/focus so the highlight follows the player's pointer.
+      if (this._selectedBuildId == null) this._selectedBuildId = id;
+      const select = () => { this._selectedBuildId = id; };
+      it.addEventListener("pointerenter", select);
+      it.addEventListener("focus", select);
       it.onclick = () => {
         if (this.app.place(id, gx, gz)) this.closeBuildPicker();
         else { const r2 = placeReason(state, id, gx, gz); this.toast(r2 === "cost" ? STR.cantAfford : r2 === "adjacency" ? STR.needsNear(ADJ_LABEL[ADJ_REQ[id]] || ADJ_REQ[id]) : STR.locked, "bad"); }
@@ -196,7 +204,14 @@ export class UI {
     this.pickerEl.appendChild(grid);
     this.pickerEl.classList.remove("hidden");
   }
-  closeBuildPicker() { this.pickerEl.classList.add("hidden"); this._pickTile = null; }
+  closeBuildPicker() { this.pickerEl.classList.add("hidden"); this._pickTile = null; this._selectedBuildId = null; }
+
+  // True while the build picker is open (so pointer-move can switch from the
+  // single-tile highlight to a multi-cell footprint preview).
+  isPickerOpen() { return !this.pickerEl.classList.contains("hidden"); }
+  // The build id the picker currently has selected (null when closed). Consumed
+  // by main.js pointer-move → renderer.hoverFootprint(sx, sy, selectedBuildId).
+  selectedBuildId() { return this.isPickerOpen() ? this._selectedBuildId : null; }
 
   // tap a placed building → upgrade it through tiers
   openUpgrade(id) {
@@ -207,7 +222,7 @@ export class UI {
     const curMul = TIER_MULT[tier - 1] || 1;
     let pips = ""; for (let i = 1; i <= MAX_TIER; i++) pips += `<span class="up-pip ${i <= tier ? "on" : ""}"></span>`;
     let body = `<div class="up-head"><span class="pk-ic">${icon(this._defIcon(d))}</span>
-        <div class="up-id"><div class="up-name">${d.name} <span class="up-tier">Lv ${tier}</span></div><div class="up-type">${this._catLabel(d)} · ×${owned}</div></div>
+        <div class="up-id"><div class="up-name">${d.name} <span class="cnt sizechip">${sizeLabel(id)}</span> <span class="up-tier">Lv ${tier}</span></div><div class="up-type">${this._catLabel(d)} · ×${owned}</div></div>
         <button class="pk-x up-x">✕</button></div>
       <div class="up-desc">${d.desc || ""}</div>
       <div class="up-now">${STR.nowProducing}: <b>${this._effectText(d, curMul)}</b></div>
@@ -222,11 +237,35 @@ export class UI {
     this.upgradeEl.innerHTML = body;
     this.upgradeEl.querySelector(".up-x").onclick = () => this.closeUpgrade();
     const go = this.upgradeEl.querySelector(".up-go");
-    if (go) go.onclick = () => { if (this.app.upgrade(id)) { this.openUpgrade(id); } else this.toast(STR.cantAfford, "bad"); };
+    if (go) go.onclick = () => {
+      // capture tier BEFORE the purchase so we can compute the multiplier jump
+      const prevTier = buildingTier(this.app.getState(), id);
+      if (this.app.upgrade(id)) {
+        this._tierUpJuice(d, prevTier);
+        this.openUpgrade(id);
+      } else this.toast(STR.cantAfford, "bad");
+    };
     this.upgradeEl.classList.remove("hidden");
   }
   closeUpgrade() { this.upgradeEl.classList.add("hidden"); this._upId = null; }
   closePanels() { this.closeBuildPicker(); this.closeUpgrade(); }
+
+  // Cosmetic celebration after a SUCCESSFUL upgrade: a "+220% limestone/s" delta
+  // toast (computed from the tier multiplier jump) plus the existing burst/ring.
+  _tierUpJuice(d, prevTier) {
+    const prevMul = TIER_MULT[prevTier - 1] || 1;
+    const nextMul = TIER_MULT[prevTier] || prevMul;
+    // Find the primary produced resource (if any) to label the delta.
+    const prod = d.effect && d.effect.produce;
+    const rk = prod && Object.keys(prod)[0];
+    if (rk && nextMul > prevMul) {
+      const pct = Math.round((nextMul / prevMul - 1) * 100);
+      this.toast(STR.upgradeDelta(pct, RES_META[rk].name), "go");
+    }
+    // Reuse the existing celebratory burst/ring. Renderer is not exposed to the
+    // UI directly, so trigger it through the app facade when available.
+    if (this.app.upgradeFx) this.app.upgradeFx(this._upId);
+  }
 
   popup(text, cls) {
     this.popupEl.textContent = text;
@@ -339,6 +378,16 @@ export class UI {
     this.toaster.appendChild(t);
     setTimeout(() => t.classList.add("show"), 10);
     setTimeout(() => { t.classList.remove("show"); setTimeout(() => t.remove(), 400); }, 3600);
+    while (this.toaster.children.length > 4) this.toaster.firstChild.remove();
+  }
+
+  // Celebratory milestone toast (cosmetic). Driven by {type:"milestone",text}
+  // fx drained from the sim. Reuses the toast mechanism with a distinct class.
+  milestone(text) {
+    const t = el("div", "toast milestone", `<span class="ic">${icon("legacy")}</span><span class="ms-body"><b>${STR.milestone}</b><span>${text}</span></span>`);
+    this.toaster.appendChild(t);
+    setTimeout(() => t.classList.add("show"), 10);
+    setTimeout(() => { t.classList.remove("show"); setTimeout(() => t.remove(), 400); }, 4200);
     while (this.toaster.children.length > 4) this.toaster.firstChild.remove();
   }
 

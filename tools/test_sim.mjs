@@ -5,7 +5,7 @@ import {
   doPrestige, legacyGain, simulateOffline, isUnlocked, whip, harvestNode,
   placeBuilding, placeReason, upgradeBuilding, buildingTier, canUpgrade,
 } from "../src/sim.js";
-import { wonderGeom, blocksForLayer, wonderFor, FIRST_WONDER_TOTAL, BUILDINGS, WORKERS, genNodes } from "../src/data.js";
+import { wonderGeom, blocksForLayer, wonderFor, FIRST_WONDER_TOTAL, BUILDINGS, WORKERS, genNodes, MILESTONES, sizeLabel } from "../src/data.js";
 import { fmt, fmtTime } from "../src/format.js";
 import { pyramidBounds } from "../src/iso.js";
 
@@ -98,6 +98,14 @@ ok(off && off.blocks >= 0 && finite(off.gained), "offline credit: +" + fmt(off.b
 const b = pyramidBounds(14, 7, 40);
 ok(b.maxX > b.minX && b.maxY > b.minY, "pyramid bounds positive");
 ok(blocksForLayer(5, 0) > 1e6, "late wonder needs millions/layer: " + fmt(blocksForLayer(5, 0)));
+
+// milestones catalog (cosmetic data, not save state)
+ok(Array.isArray(MILESTONES) && MILESTONES.length > 0, "MILESTONES is a non-empty array: " + MILESTONES.length);
+ok(MILESTONES.every((m) => m.id && m.need && typeof m.text === "string"), "each milestone has id/need/text");
+
+// sizeLabel reflects SIZE footprints
+ok(sizeLabel("temple") === "2×2", "sizeLabel(temple) === 2x2: " + sizeLabel("temple"));
+ok(sizeLabel("quarry") === "1×1", "sizeLabel(quarry) === 1x1: " + sizeLabel("quarry"));
 
 console.log(fails === 0 ? "\nALL TESTS PASSED" : `\n${fails} TEST(S) FAILED`);
 process.exit(fails === 0 ? 0 : 1);
